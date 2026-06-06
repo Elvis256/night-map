@@ -102,7 +102,7 @@ export default function VerifyScreen() {
 
       <View style={styles.content}>
         {/* Step icon */}
-        <View style={[styles.stepIcon, { backgroundColor: "rgba(255,45,126,0.12)", borderColor: "rgba(255,45,126,0.3)" }]}>
+        <View style={[styles.stepIcon, { backgroundColor: "rgba(255,78,98,0.12)", borderColor: "rgba(255,78,98,0.3)" }]}>
           <Ionicons name={step.icon as never} size={40} color={colors.primary} />
         </View>
 
@@ -123,7 +123,7 @@ export default function VerifyScreen() {
 
         {currentStep === "selfie" && (
           <TouchableOpacity
-            style={[styles.cameraBox, { borderColor: colors.primary, backgroundColor: "rgba(255,45,126,0.06)" }]}
+            style={[styles.cameraBox, { borderColor: colors.primary, backgroundColor: "rgba(255,78,98,0.06)" }]}
             onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
           >
             <View style={[styles.cameraCircle, { backgroundColor: colors.muted }]}>
@@ -162,7 +162,7 @@ export default function VerifyScreen() {
                 <Ionicons name={done ? "checkmark-circle" : "time-outline"} size={18} color={done ? "#22c55e" : colors.mutedForeground} />
               </View>
             ))}
-            <View style={[styles.reviewNote, { backgroundColor: "rgba(245,166,35,0.08)", borderColor: "rgba(245,166,35,0.2)" }]}>
+            <View style={[styles.reviewNote, { backgroundColor: "rgba(255,138,61,0.08)", borderColor: "rgba(255,138,61,0.2)" }]}>
               <Ionicons name="time-outline" size={14} color={colors.accent} />
               <Text style={[styles.reviewNoteText, { color: colors.mutedForeground }]}>
                 Human review within 24 hours. You'll be notified when verified.

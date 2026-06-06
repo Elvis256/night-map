@@ -36,7 +36,7 @@ const MENU_ICONS: Record<string, string> = {
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   now: { label: "Available Now", color: "#22c55e" },
-  tonight: { label: "Available Tonight", color: "#f5a623" },
+  tonight: { label: "Available Tonight", color: "#FF8A3D" },
   offline: { label: "Offline", color: "#6b6b8a" },
 };
 
@@ -88,7 +88,7 @@ export default function CompanionDetailScreen() {
           </TouchableOpacity>
 
           {companion.isSpotlight && (
-            <View style={[styles.spotlightBanner, { backgroundColor: "rgba(245,166,35,0.9)" }]}>
+            <View style={[styles.spotlightBanner, { backgroundColor: "rgba(255,138,61,0.9)" }]}>
               <Ionicons name="star" size={12} color="#fff" />
               <Text style={styles.spotlightText}>Spotlight</Text>
             </View>
@@ -97,7 +97,7 @@ export default function CompanionDetailScreen() {
           <View style={styles.photoInfo}>
             <View style={styles.nameRow}>
               <Text style={styles.name}>{companion.name}, {companion.age}</Text>
-              {companion.verified && <Ionicons name="checkmark-circle" size={22} color="#ff2d7e" />}
+              {companion.verified && <Ionicons name="checkmark-circle" size={22} color="#FF4E62" />}
             </View>
             <View style={styles.statusRow}>
               <View style={[styles.statusDot, { backgroundColor: status.color }]} />
@@ -107,7 +107,7 @@ export default function CompanionDetailScreen() {
             {/* Badges */}
             <View style={styles.photoBadges}>
               {companion.isHotStreak && (
-                <View style={[styles.photoBadge, { backgroundColor: "rgba(229,57,53,0.85)" }]}>
+                <View style={[styles.photoBadge, { backgroundColor: "rgba(255,78,98,0.85)" }]}>
                   <Ionicons name="flame" size={11} color="#fff" />
                   <Text style={styles.photoBadgeText}>Hot Streak</Text>
                 </View>
@@ -127,7 +127,7 @@ export default function CompanionDetailScreen() {
           <View style={styles.trustRow}>
             <TrustBadge score={companion.trustScore} size="md" />
             <View style={styles.ratingRow}>
-              <Ionicons name="star" size={14} color="#f5a623" />
+              <Ionicons name="star" size={14} color="#FF8A3D" />
               <Text style={[styles.ratingNum, { color: colors.foreground }]}>{companion.rating.toFixed(1)}</Text>
             </View>
             <View style={[styles.metaPill, { backgroundColor: colors.muted }]}>
@@ -141,12 +141,12 @@ export default function CompanionDetailScreen() {
           </View>
 
           {/* Pricing */}
-          <View style={[styles.card, { backgroundColor: colors.card, borderColor: companion.isTonightsDeal ? "#f5a623" : colors.border }]}>
+          <View style={[styles.card, { backgroundColor: colors.card, borderColor: companion.isTonightsDeal ? "#FF8A3D" : colors.border }]}>
             <View style={styles.pricingHeader}>
               <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Rate</Text>
               {companion.isTonightsDeal && (
-                <View style={[styles.dealBadge, { backgroundColor: "#f5a623" }]}>
-                  <Ionicons name="flash" size={12} color="#080810" />
+                <View style={[styles.dealBadge, { backgroundColor: "#FF8A3D" }]}>
+                  <Ionicons name="flash" size={12} color="#0B0B0F" />
                   <Text style={styles.dealBadgeText}>{companion.dealDiscount}% Tonight Only</Text>
                 </View>
               )}
@@ -155,7 +155,7 @@ export default function CompanionDetailScreen() {
               {companion.isTonightsDeal ? (
                 <>
                   <Text style={[styles.priceStrike, { color: colors.mutedForeground }]}>{formatUGX(companion.rate)}</Text>
-                  <Text style={[styles.priceDeal, { color: "#f5a623" }]}>{formatUGX(dealPrice!)}/hr</Text>
+                  <Text style={[styles.priceDeal, { color: "#FF8A3D" }]}>{formatUGX(dealPrice!)}/hr</Text>
                 </>
               ) : (
                 <Text style={[styles.price, { color: colors.foreground }]}>{formatUGX(companion.rate)}/hr</Text>
@@ -164,7 +164,7 @@ export default function CompanionDetailScreen() {
                 Minimum {companion.minBookingHours} hour{companion.minBookingHours > 1 ? "s" : ""}
               </Text>
             </View>
-            <View style={[styles.escrowNote, { backgroundColor: "rgba(245,166,35,0.08)", borderColor: "rgba(245,166,35,0.2)" }]}>
+            <View style={[styles.escrowNote, { backgroundColor: "rgba(255,138,61,0.08)", borderColor: "rgba(255,138,61,0.2)" }]}>
               <Ionicons name="shield-checkmark" size={12} color={colors.accent} />
               <Text style={[styles.escrowText, { color: colors.mutedForeground }]}>
                 Payment held in escrow · released after meetup confirmed
@@ -184,8 +184,8 @@ export default function CompanionDetailScreen() {
             <Text style={[styles.menuSubtitle, { color: colors.mutedForeground }]}>Available activities</Text>
             <View style={styles.menuGrid}>
               {companion.menu.map((item) => (
-                <View key={item} style={[styles.menuItem, { backgroundColor: "rgba(255,45,126,0.08)", borderColor: "rgba(255,45,126,0.2)" }]}>
-                  <Ionicons name={(MENU_ICONS[item] ?? "ellipse-outline") as never} size={16} color="#ff2d7e" />
+                <View key={item} style={[styles.menuItem, { backgroundColor: "rgba(255,78,98,0.08)", borderColor: "rgba(255,78,98,0.2)" }]}>
+                  <Ionicons name={(MENU_ICONS[item] ?? "ellipse-outline") as never} size={16} color="#FF4E62" />
                   <Text style={[styles.menuItemText, { color: colors.foreground }]}>{item}</Text>
                 </View>
               ))}
@@ -209,7 +209,7 @@ export default function CompanionDetailScreen() {
           </View>
 
           {/* Safety */}
-          <View style={[styles.card, { backgroundColor: "rgba(255,45,126,0.05)", borderColor: "rgba(255,45,126,0.15)" }]}>
+          <View style={[styles.card, { backgroundColor: "rgba(255,78,98,0.05)", borderColor: "rgba(255,78,98,0.15)" }]}>
             <View style={styles.safetyRow}>
               <Ionicons name="shield-checkmark" size={18} color={colors.primary} />
               <View style={{ flex: 1 }}>
@@ -339,7 +339,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 10,
   },
-  dealBadgeText: { color: "#080810", fontFamily: "Inter_700Bold", fontSize: 11 },
+  dealBadgeText: { color: "#0B0B0F", fontFamily: "Inter_700Bold", fontSize: 11 },
   pricingRow: { flexDirection: "row", alignItems: "center", gap: 10 },
   price: { fontFamily: "Inter_700Bold", fontSize: 22 },
   priceStrike: {

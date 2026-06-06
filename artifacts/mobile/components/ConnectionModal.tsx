@@ -94,7 +94,7 @@ export function ConnectionModal({ companion, visible, onClose, onConnected }: Co
 
           {step === "done" ? (
             <View style={styles.doneState}>
-              <View style={[styles.doneIcon, { backgroundColor: "rgba(255,45,126,0.15)" }]}>
+              <View style={[styles.doneIcon, { backgroundColor: "rgba(255,78,98,0.15)" }]}>
                 <Ionicons name="checkmark-circle" size={56} color={colors.primary} />
               </View>
               <Text style={[styles.doneTitle, { color: colors.foreground }]}>Connected!</Text>
@@ -136,8 +136,8 @@ export function ConnectionModal({ companion, visible, onClose, onConnected }: Co
                       {
                         backgroundColor: selected === opt.type
                           ? opt.highlight
-                            ? "rgba(245,166,35,0.12)"
-                            : "rgba(255,45,126,0.12)"
+                            ? "rgba(255,138,61,0.12)"
+                            : "rgba(255,78,98,0.12)"
                           : colors.muted,
                         borderColor: selected === opt.type
                           ? opt.highlight ? colors.accent : colors.primary
@@ -147,7 +147,7 @@ export function ConnectionModal({ companion, visible, onClose, onConnected }: Co
                     onPress={() => setSelected(opt.type)}
                   >
                     <View style={[styles.optionIconWrap, {
-                      backgroundColor: opt.highlight ? "rgba(245,166,35,0.15)" : "rgba(255,45,126,0.12)"
+                      backgroundColor: opt.highlight ? "rgba(255,138,61,0.15)" : "rgba(255,78,98,0.12)"
                     }]}>
                       <Ionicons
                         name={opt.icon as never}
@@ -181,7 +181,7 @@ export function ConnectionModal({ companion, visible, onClose, onConnected }: Co
                     style={[
                       styles.paymentBtn,
                       {
-                        backgroundColor: paymentMethod === method ? "rgba(255,45,126,0.12)" : colors.muted,
+                        backgroundColor: paymentMethod === method ? "rgba(255,78,98,0.12)" : colors.muted,
                         borderColor: paymentMethod === method ? colors.primary : colors.border,
                       },
                     ]}
@@ -194,7 +194,7 @@ export function ConnectionModal({ companion, visible, onClose, onConnected }: Co
                 ))}
               </View>
 
-              <View style={[styles.escrowNote, { backgroundColor: "rgba(245,166,35,0.08)", borderColor: "rgba(245,166,35,0.25)" }]}>
+              <View style={[styles.escrowNote, { backgroundColor: "rgba(255,138,61,0.08)", borderColor: "rgba(255,138,61,0.25)" }]}>
                 <Ionicons name="shield-checkmark" size={14} color={colors.accent} />
                 <Text style={[styles.escrowText, { color: colors.mutedForeground }]}>
                   Payment held in escrow — released only after meetup confirmed

@@ -17,7 +17,7 @@ export function TrustBadge({ score, size = "md" }: TrustBadgeProps) {
       style={[
         styles.badge,
         {
-          backgroundColor: "rgba(245,166,35,0.15)",
+          backgroundColor: "rgba(255,138,61,0.15)",
           borderColor: colors.accent,
           paddingHorizontal: isSmall ? 6 : 8,
           paddingVertical: isSmall ? 2 : 4,

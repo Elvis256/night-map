@@ -112,7 +112,7 @@ function SwipeCard({
           <View style={styles.cardNameRow}>
             <Text style={styles.cardName}>{companion.name}, {companion.age}</Text>
             {companion.verified && (
-              <Ionicons name="checkmark-circle" size={18} color="#ff2d7e" />
+              <Ionicons name="checkmark-circle" size={18} color="#FF4E62" />
             )}
           </View>
           <View style={styles.cardMeta}>
@@ -130,7 +130,7 @@ function SwipeCard({
           <View style={styles.cardBottom}>
             <TrustBadge score={companion.trustScore} size="sm" />
             <View style={styles.ratingRow}>
-              <Ionicons name="star" size={12} color="#f5a623" />
+              <Ionicons name="star" size={12} color="#FF8A3D" />
               <Text style={styles.ratingText}>{companion.rating.toFixed(1)}</Text>
             </View>
           </View>
@@ -213,12 +213,12 @@ export default function DiscoverScreen() {
       {queue.length > 0 && (
         <View style={[styles.actions, { paddingBottom: Platform.OS === "web" ? 34 : insets.bottom + 16 }]}>
           <TouchableOpacity style={[styles.actionBtn, styles.passBtn, { borderColor: colors.border, backgroundColor: colors.card }]} onPress={handlePassButton}>
-            <Ionicons name="close" size={28} color="#ff4d4d" />
+            <Ionicons name="close" size={28} color="#FF4E62" />
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.actionBtn, styles.superBtn, { backgroundColor: "rgba(245,166,35,0.15)", borderColor: colors.accent }]} onPress={() => router.push(`/companion/${queue[0].id}`)}>
+          <TouchableOpacity style={[styles.actionBtn, styles.superBtn, { backgroundColor: "rgba(255,138,61,0.15)", borderColor: colors.accent }]} onPress={() => router.push(`/companion/${queue[0].id}`)}>
             <Ionicons name="star" size={22} color={colors.accent} />
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.actionBtn, styles.likeBtn, { backgroundColor: "rgba(255,45,126,0.15)", borderColor: colors.primary }]} onPress={handleLikeButton}>
+          <TouchableOpacity style={[styles.actionBtn, styles.likeBtn, { backgroundColor: "rgba(255,78,98,0.15)", borderColor: colors.primary }]} onPress={handleLikeButton}>
             <Ionicons name="heart" size={28} color={colors.primary} />
           </TouchableOpacity>
         </View>
@@ -293,25 +293,25 @@ const styles = StyleSheet.create({
     top: 32,
     left: 24,
     borderWidth: 3,
-    borderColor: "#ff2d7e",
+    borderColor: "#FF4E62",
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 6,
     transform: [{ rotate: "-15deg" }],
   },
-  likeStampText: { color: "#ff2d7e", fontFamily: "Inter_700Bold", fontSize: 22 },
+  likeStampText: { color: "#FF4E62", fontFamily: "Inter_700Bold", fontSize: 22 },
   passStamp: {
     position: "absolute",
     top: 32,
     right: 24,
     borderWidth: 3,
-    borderColor: "#ff4d4d",
+    borderColor: "#FF4E62",
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 6,
     transform: [{ rotate: "15deg" }],
   },
-  passStampText: { color: "#ff4d4d", fontFamily: "Inter_700Bold", fontSize: 22 },
+  passStampText: { color: "#FF4E62", fontFamily: "Inter_700Bold", fontSize: 22 },
   cardInfo: {
     position: "absolute",
     bottom: 0,
@@ -335,7 +335,7 @@ const styles = StyleSheet.create({
   cardBio: { color: "rgba(255,255,255,0.7)", fontFamily: "Inter_400Regular", fontSize: 13, lineHeight: 18 },
   cardBottom: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   ratingRow: { flexDirection: "row", alignItems: "center", gap: 3 },
-  ratingText: { color: "#f5a623", fontFamily: "Inter_600SemiBold", fontSize: 13 },
+  ratingText: { color: "#FF8A3D", fontFamily: "Inter_600SemiBold", fontSize: 13 },
   emptyState: {
     width: "100%",
     maxWidth: 380,
@@ -359,7 +359,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 40,
-    shadowColor: "#ff2d7e",
+    shadowColor: "#FF4E62",
     shadowOpacity: 0.6,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 4 },

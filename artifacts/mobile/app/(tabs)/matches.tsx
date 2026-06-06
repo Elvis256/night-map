@@ -73,7 +73,7 @@ export default function MatchesScreen() {
       <View style={[styles.header, { paddingTop: Platform.OS === "web" ? 67 : insets.top }]}>
         <Text style={[styles.headerTitle, { color: colors.foreground }]}>Connections</Text>
         {matches.length > 0 && (
-          <View style={[styles.countBadge, { backgroundColor: "rgba(255,45,126,0.15)" }]}>
+          <View style={[styles.countBadge, { backgroundColor: "rgba(255,78,98,0.15)" }]}>
             <Text style={[styles.countText, { color: colors.primary }]}>{matches.length}</Text>
           </View>
         )}

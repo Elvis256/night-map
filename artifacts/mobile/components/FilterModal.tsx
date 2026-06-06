@@ -161,7 +161,7 @@ function ChipRow<T extends string | number>({ options, selected, onSelect, color
           style={[
             styles.chip,
             {
-              backgroundColor: selected === opt.value ? "rgba(255,45,126,0.15)" : colors.muted,
+              backgroundColor: selected === opt.value ? "rgba(255,78,98,0.15)" : colors.muted,
               borderColor: selected === opt.value ? colors.primary : colors.border,
             },
           ]}

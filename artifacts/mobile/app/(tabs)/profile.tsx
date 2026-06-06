@@ -43,7 +43,7 @@ function SettingRow({
       onPress={onPress}
       activeOpacity={onPress ? 0.7 : 1}
     >
-      <View style={[styles.settingIcon, { backgroundColor: iconBg ?? (danger ? "rgba(255,77,77,0.12)" : colors.muted) }]}>
+      <View style={[styles.settingIcon, { backgroundColor: iconBg ?? (danger ? "rgba(255,78,98,0.12)" : colors.muted) }]}>
         <Ionicons name={icon as never} size={17} color={iconColor ?? (danger ? colors.destructive : colors.primary)} />
       </View>
       <Text style={[styles.settingLabel, { color: danger ? colors.destructive : colors.foreground }]}>{label}</Text>
@@ -136,7 +136,7 @@ export default function ProfileScreen() {
       {/* Verification CTA */}
       {!userProfile.verified && (
         <TouchableOpacity
-          style={[styles.verifyBanner, { backgroundColor: "rgba(245,166,35,0.1)", borderColor: colors.accent }]}
+          style={[styles.verifyBanner, { backgroundColor: "rgba(255,138,61,0.1)", borderColor: colors.accent }]}
           onPress={() => router.push("/verify")}
         >
           <Ionicons name="shield-outline" size={20} color={colors.accent} />
@@ -167,7 +167,7 @@ export default function ProfileScreen() {
             </View>
           </View>
           <TouchableOpacity
-            style={[styles.payoutBtn, { backgroundColor: "rgba(255,45,126,0.12)", borderColor: colors.primary }]}
+            style={[styles.payoutBtn, { backgroundColor: "rgba(255,78,98,0.12)", borderColor: colors.primary }]}
             onPress={() => Alert.alert("Payout Request", "Payout via MTN MoMo will be processed within 24 hours.")}
           >
             <Ionicons name="phone-portrait-outline" size={15} color={colors.primary} />
@@ -295,19 +295,19 @@ export default function ProfileScreen() {
         style={[
           styles.panicBtn,
           {
-            backgroundColor: panicActive ? "#ff4d4d" : "rgba(255,77,77,0.1)",
-            borderColor: "#ff4d4d",
+            backgroundColor: panicActive ? "#FF4E62" : "rgba(255,78,98,0.1)",
+            borderColor: "#FF4E62",
           },
         ]}
         onPress={handlePanic}
         onLongPress={handlePanic}
       >
-        <Ionicons name="warning" size={20} color={panicActive ? "#fff" : "#ff4d4d"} />
+        <Ionicons name="warning" size={20} color={panicActive ? "#fff" : "#FF4E62"} />
         <View>
-          <Text style={[styles.panicTitle, { color: panicActive ? "#fff" : "#ff4d4d" }]}>
+          <Text style={[styles.panicTitle, { color: panicActive ? "#fff" : "#FF4E62" }]}>
             {panicActive ? "ALERT SENT" : "Panic Button"}
           </Text>
-          <Text style={[styles.panicSubtitle, { color: panicActive ? "rgba(255,255,255,0.8)" : "rgba(255,77,77,0.7)" }]}>
+          <Text style={[styles.panicSubtitle, { color: panicActive ? "rgba(255,255,255,0.8)" : "rgba(255,78,98,0.7)" }]}>
             Hold to send emergency alert + GPS
           </Text>
         </View>

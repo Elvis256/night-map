@@ -18,11 +18,11 @@ import { Companion, useApp } from "@/context/AppContext";
 import { TrustBadge } from "@/components/TrustBadge";
 import { FilterModal } from "@/components/FilterModal";
 
-const CITIES = ["Kampala", "Nairobi", "Dubai", "London", "Nairobi", "Mbarara", "Entebbe"];
+const CITIES = ["Kampala", "Entebbe", "Mbarara", "Gulu", "Jinja", "Nairobi", "Dar es Salaam", "Dubai"];
 
 const STATUS_COLOR: Record<string, string> = {
   now: "#22c55e",
-  tonight: "#f5a623",
+  tonight: "#FF8A3D",
   offline: "#6b6b8a",
 };
 
@@ -56,11 +56,11 @@ function MapPinView({
     >
       {companion.isSpotlight && (
         <View style={styles.crownBadge}>
-          <Ionicons name="star" size={8} color="#f5a623" />
+          <Ionicons name="star" size={8} color="#FF8A3D" />
         </View>
       )}
       {companion.isTonightsDeal && pulseAnim && (
-        <Animated.View style={[styles.dealRing, { borderColor: "#f5a623", transform: [{ scale: pulseAnim }], opacity: pulseAnim.interpolate({ inputRange: [1, 1.4], outputRange: [0.8, 0] }) }]} />
+        <Animated.View style={[styles.dealRing, { borderColor: "#FF8A3D", transform: [{ scale: pulseAnim }], opacity: pulseAnim.interpolate({ inputRange: [1, 1.4], outputRange: [0.8, 0] }) }]} />
       )}
       <Text style={styles.pinInitial}>{companion.name[0]}</Text>
     </TouchableOpacity>
@@ -83,9 +83,9 @@ function BadgeRow({ companion, colors }: { companion: Companion; colors: ReturnT
         </View>
       )}
       {companion.isTonightsDeal && (
-        <View style={[styles.badge, { backgroundColor: "rgba(245,166,35,0.15)", borderColor: "#f5a623" }]}>
-          <Ionicons name="flash" size={10} color="#f5a623" />
-          <Text style={[styles.badgeText, { color: "#f5a623" }]}>{companion.dealDiscount}% Deal</Text>
+        <View style={[styles.badge, { backgroundColor: "rgba(255,138,61,0.15)", borderColor: "#FF8A3D" }]}>
+          <Ionicons name="flash" size={10} color="#FF8A3D" />
+          <Text style={[styles.badgeText, { color: "#FF8A3D" }]}>{companion.dealDiscount}% Deal</Text>
         </View>
       )}
     </View>
@@ -96,7 +96,7 @@ function CompanionPinCard({ companion, onClose, colors }: { companion: Companion
   const dotColor = STATUS_COLOR[companion.availabilityStatus];
   return (
     <Pressable
-      style={[styles.pinCard, { backgroundColor: colors.card, borderColor: companion.isTonightsDeal ? "#f5a623" : colors.border }]}
+      style={[styles.pinCard, { backgroundColor: colors.card, borderColor: companion.isTonightsDeal ? "#FF8A3D" : colors.border }]}
       onPress={() => { onClose(); router.push(`/companion/${companion.id}`); }}
     >
       <View style={[styles.pinCardAvatar, { backgroundColor: companion.color }]}>
@@ -106,7 +106,7 @@ function CompanionPinCard({ companion, onClose, colors }: { companion: Companion
       <View style={styles.pinCardInfo}>
         <View style={styles.pinNameRow}>
           <Text style={[styles.pinCardName, { color: colors.foreground }]}>{companion.name}, {companion.age}</Text>
-          {companion.isSpotlight && <Ionicons name="star" size={12} color="#f5a623" />}
+          {companion.isSpotlight && <Ionicons name="star" size={12} color="#FF8A3D" />}
         </View>
         <Text style={[styles.pinCardDist, { color: colors.mutedForeground }]}>
           {companion.distance} km · UGX {(companion.rate / 1000).toFixed(0)}k/hr
@@ -183,12 +183,12 @@ export default function MapScreen() {
               <Text style={[styles.ghostChipText, { color: colors.mutedForeground }]}>Ghost</Text>
             </View>
           )}
-          <View style={[styles.liveChip, { backgroundColor: "rgba(255,45,126,0.12)" }]}>
+          <View style={[styles.liveChip, { backgroundColor: "rgba(255,78,98,0.12)" }]}>
             <Animated.View style={[styles.liveDot, { transform: [{ scale: pulseAnim }] }]} />
             <Text style={[styles.liveText, { color: colors.primary }]}>{onlineNow} live</Text>
           </View>
           <TouchableOpacity
-            style={[styles.filterBtn, { backgroundColor: activeFilterCount > 0 ? "rgba(255,45,126,0.15)" : colors.card, borderColor: activeFilterCount > 0 ? colors.primary : colors.border }]}
+            style={[styles.filterBtn, { backgroundColor: activeFilterCount > 0 ? "rgba(255,78,98,0.15)" : colors.card, borderColor: activeFilterCount > 0 ? colors.primary : colors.border }]}
             onPress={() => setShowFilters(true)}
           >
             <Ionicons name="options" size={16} color={activeFilterCount > 0 ? colors.primary : colors.foreground} />
@@ -259,7 +259,7 @@ export default function MapScreen() {
         <View style={[styles.legend, { backgroundColor: "rgba(8,8,16,0.85)" }]}>
           {[
             { color: "#22c55e", label: "Now" },
-            { color: "#f5a623", label: "Tonight" },
+            { color: "#FF8A3D", label: "Tonight" },
             { color: "#6b6b8a", label: "Offline" },
           ].map(({ color, label }) => (
             <View key={label} style={styles.legendItem}>
@@ -306,11 +306,11 @@ export default function MapScreen() {
             {trending.map((c, i) => (
               <TouchableOpacity
                 key={c.id}
-                style={[styles.trendingCard, { backgroundColor: colors.card, borderColor: c.isSpotlight ? "#f5a623" : colors.border }]}
+                style={[styles.trendingCard, { backgroundColor: colors.card, borderColor: c.isSpotlight ? "#FF8A3D" : colors.border }]}
                 onPress={() => router.push(`/companion/${c.id}`)}
               >
                 <View style={styles.trendingRank}>
-                  <Text style={[styles.trendingRankNum, { color: i === 0 ? "#f5a623" : colors.mutedForeground }]}>#{i + 1}</Text>
+                  <Text style={[styles.trendingRankNum, { color: i === 0 ? "#FF8A3D" : colors.mutedForeground }]}>#{i + 1}</Text>
                 </View>
                 <View style={[styles.trendingAvatar, { backgroundColor: c.color }]}>
                   <Text style={styles.trendingInitial}>{c.name[0]}</Text>
@@ -372,7 +372,7 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: "#ff2d7e",
+    backgroundColor: "#FF4E62",
   },
   liveText: { fontFamily: "Inter_600SemiBold", fontSize: 12 },
   filterBtn: {
@@ -448,7 +448,7 @@ const styles = StyleSheet.create({
     width: 16,
     height: 16,
     borderRadius: 8,
-    backgroundColor: "#f5a623",
+    backgroundColor: "#FF8A3D",
     alignItems: "center",
     justifyContent: "center",
   },
