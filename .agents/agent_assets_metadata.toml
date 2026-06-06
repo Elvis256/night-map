@@ -1,0 +1,26 @@
+uploads = []
+outputs = []
+
+[[generated]]
+id = "zc-rQCcyyWkSwBOoEVNiv"
+uri = "file://artifacts/mobile/assets/images/icon.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "0HO5wTSLdSttW-Jo5dbe3"
+uri = "file://artifacts/mobile/assets/images/companion1.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "kf375Sz6DZf0v7MXE9oho"
+uri = "file://artifacts/mobile/assets/images/companion2.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "kp0EheSU_HjT4a8JKdgXV"
+uri = "file://artifacts/mobile/assets/images/companion3.png"
+type = "image"
+title = "generated_image"
