@@ -26,17 +26,15 @@ function RootLayoutNav() {
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen
         name="companion/[id]"
-        options={{
-          headerShown: false,
-          presentation: "card",
-        }}
+        options={{ headerShown: false, presentation: "card" }}
       />
       <Stack.Screen
         name="chat/[id]"
-        options={{
-          headerShown: false,
-          presentation: "card",
-        }}
+        options={{ headerShown: false, presentation: "card" }}
+      />
+      <Stack.Screen
+        name="verify"
+        options={{ headerShown: false, presentation: "card" }}
       />
     </Stack>
   );

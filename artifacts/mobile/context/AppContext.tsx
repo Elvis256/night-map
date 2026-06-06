@@ -7,12 +7,16 @@ import React, {
   useState,
 } from "react";
 
+export type AvailabilityStatus = "now" | "tonight" | "offline";
+export type CompanionGender = "female" | "male";
+
 export interface Companion {
   id: string;
   name: string;
   age: number;
   photoIndex: number;
   vibes: string[];
+  menu: string[];
   trustScore: number;
   rating: number;
   verified: boolean;
@@ -23,6 +27,17 @@ export interface Companion {
   lat: number;
   lng: number;
   color: string;
+  rate: number;
+  minBookingHours: number;
+  availabilityStatus: AvailabilityStatus;
+  isSpotlight: boolean;
+  isTonightsDeal: boolean;
+  dealDiscount: number;
+  isNewInTown: boolean;
+  isHotStreak: boolean;
+  completedMeetups: number;
+  responseRate: number;
+  gender: CompanionGender;
 }
 
 export interface Match {
@@ -31,6 +46,7 @@ export interface Match {
   lastMessage: string;
   lastMessageTime: Date;
   unread: number;
+  connectionType: "standard" | "super" | "paidDm";
 }
 
 export interface Message {
@@ -44,13 +60,27 @@ export interface Message {
 export interface UserProfile {
   name: string;
   isCompanion: boolean;
+  isLadiesMode: boolean;
+  ghostMode: boolean;
   availableTonight: boolean;
   verified: boolean;
   city: string;
+  trustedContact: string;
+  walletBalance: number;
+  totalEarnings: number;
+  pendingPayout: number;
 }
 
-const KAMPALA_LAT = 0.3136;
-const KAMPALA_LNG = 32.5811;
+export interface Filters {
+  maxDistance: number;
+  minRating: number;
+  verifiedOnly: boolean;
+  status: "all" | "now" | "tonight";
+  maxRate: number;
+}
+
+const BASE_LAT = 0.3136;
+const BASE_LNG = 32.5811;
 
 export const COMPANIONS: Companion[] = [
   {
@@ -59,16 +89,28 @@ export const COMPANIONS: Companion[] = [
     age: 24,
     photoIndex: 0,
     vibes: ["Dinner Date", "Events", "Travel"],
+    menu: ["Dinner Date", "City Tour", "Events", "Conversation & Drinks"],
     trustScore: 97,
     rating: 4.9,
     verified: true,
     online: true,
     city: "Kampala",
     distance: 1.2,
-    bio: "Sophisticated and adventurous. Love great food, rooftop views, and genuine conversation.",
-    lat: KAMPALA_LAT + 0.008,
-    lng: KAMPALA_LNG + 0.012,
+    bio: "Sophisticated and adventurous. Love great food, rooftop views, and genuine conversation. Available most evenings.",
+    lat: BASE_LAT + 0.008,
+    lng: BASE_LNG + 0.012,
     color: "#c2185b",
+    rate: 150000,
+    minBookingHours: 2,
+    availabilityStatus: "now",
+    isSpotlight: true,
+    isTonightsDeal: false,
+    dealDiscount: 0,
+    isNewInTown: false,
+    isHotStreak: true,
+    completedMeetups: 47,
+    responseRate: 98,
+    gender: "female",
   },
   {
     id: "2",
@@ -76,16 +118,28 @@ export const COMPANIONS: Companion[] = [
     age: 27,
     photoIndex: 1,
     vibes: ["Nightlife", "Dancing", "VIP Access"],
+    menu: ["Nightclub", "Pool/Swim", "Movie Night", "Conversation & Drinks"],
     trustScore: 94,
     rating: 4.8,
     verified: true,
     online: true,
     city: "Kampala",
     distance: 2.1,
-    bio: "I know every hidden gem in the city. Let me show you a night you won't forget.",
-    lat: KAMPALA_LAT - 0.005,
-    lng: KAMPALA_LNG + 0.018,
+    bio: "I know every hidden gem in the city. Let me show you a night you won't forget. Dance all night.",
+    lat: BASE_LAT - 0.005,
+    lng: BASE_LNG + 0.018,
     color: "#7b1fa2",
+    rate: 120000,
+    minBookingHours: 2,
+    availabilityStatus: "now",
+    isSpotlight: false,
+    isTonightsDeal: true,
+    dealDiscount: 30,
+    isNewInTown: false,
+    isHotStreak: true,
+    completedMeetups: 31,
+    responseRate: 94,
+    gender: "female",
   },
   {
     id: "3",
@@ -93,6 +147,7 @@ export const COMPANIONS: Companion[] = [
     age: 25,
     photoIndex: 2,
     vibes: ["Fine Dining", "Art", "Culture"],
+    menu: ["Dinner Date", "City Tour", "Massage", "Conversation & Drinks"],
     trustScore: 98,
     rating: 5.0,
     verified: true,
@@ -100,9 +155,20 @@ export const COMPANIONS: Companion[] = [
     city: "Kampala",
     distance: 0.8,
     bio: "Art curator by day, nightlife curator by night. Refined taste, zero judgment.",
-    lat: KAMPALA_LAT + 0.014,
-    lng: KAMPALA_LNG - 0.007,
+    lat: BASE_LAT + 0.014,
+    lng: BASE_LNG - 0.007,
     color: "#00695c",
+    rate: 200000,
+    minBookingHours: 3,
+    availabilityStatus: "now",
+    isSpotlight: false,
+    isTonightsDeal: false,
+    dealDiscount: 0,
+    isNewInTown: true,
+    isHotStreak: false,
+    completedMeetups: 12,
+    responseRate: 100,
+    gender: "female",
   },
   {
     id: "4",
@@ -110,6 +176,7 @@ export const COMPANIONS: Companion[] = [
     age: 29,
     photoIndex: 0,
     vibes: ["Business", "Hotels", "Confidential"],
+    menu: ["Dinner Date", "Nightclub", "City Tour"],
     trustScore: 92,
     rating: 4.7,
     verified: true,
@@ -117,9 +184,20 @@ export const COMPANIONS: Companion[] = [
     city: "Kampala",
     distance: 3.4,
     bio: "Discreet, professional, and charming. Perfect for business events or private evenings.",
-    lat: KAMPALA_LAT - 0.011,
-    lng: KAMPALA_LNG - 0.009,
+    lat: BASE_LAT - 0.011,
+    lng: BASE_LNG - 0.009,
     color: "#1565c0",
+    rate: 180000,
+    minBookingHours: 2,
+    availabilityStatus: "tonight",
+    isSpotlight: false,
+    isTonightsDeal: false,
+    dealDiscount: 0,
+    isNewInTown: false,
+    isHotStreak: false,
+    completedMeetups: 23,
+    responseRate: 89,
+    gender: "female",
   },
   {
     id: "5",
@@ -127,6 +205,7 @@ export const COMPANIONS: Companion[] = [
     age: 26,
     photoIndex: 1,
     vibes: ["Music", "Clubs", "Energy"],
+    menu: ["Nightclub", "Pool/Swim", "Movie Night"],
     trustScore: 95,
     rating: 4.9,
     verified: true,
@@ -134,9 +213,20 @@ export const COMPANIONS: Companion[] = [
     city: "Kampala",
     distance: 1.7,
     bio: "Life is a party and I know the best ones. Join me for an unforgettable night out.",
-    lat: KAMPALA_LAT + 0.003,
-    lng: KAMPALA_LNG + 0.022,
+    lat: BASE_LAT + 0.003,
+    lng: BASE_LNG + 0.022,
     color: "#e65100",
+    rate: 100000,
+    minBookingHours: 2,
+    availabilityStatus: "now",
+    isSpotlight: false,
+    isTonightsDeal: true,
+    dealDiscount: 25,
+    isNewInTown: false,
+    isHotStreak: false,
+    completedMeetups: 65,
+    responseRate: 96,
+    gender: "female",
   },
   {
     id: "6",
@@ -144,6 +234,7 @@ export const COMPANIONS: Companion[] = [
     age: 23,
     photoIndex: 2,
     vibes: ["Luxury", "Spa Days", "Shopping"],
+    menu: ["Dinner Date", "Massage", "City Tour", "Pool/Swim"],
     trustScore: 96,
     rating: 4.8,
     verified: true,
@@ -151,27 +242,109 @@ export const COMPANIONS: Companion[] = [
     city: "Kampala",
     distance: 4.1,
     bio: "Your perfect day-to-night companion. From afternoon adventures to evening glamour.",
-    lat: KAMPALA_LAT - 0.018,
-    lng: KAMPALA_LNG + 0.004,
+    lat: BASE_LAT - 0.018,
+    lng: BASE_LNG + 0.004,
     color: "#880e4f",
+    rate: 130000,
+    minBookingHours: 2,
+    availabilityStatus: "offline",
+    isSpotlight: false,
+    isTonightsDeal: false,
+    dealDiscount: 0,
+    isNewInTown: true,
+    isHotStreak: false,
+    completedMeetups: 8,
+    responseRate: 92,
+    gender: "female",
+  },
+  {
+    id: "7",
+    name: "David",
+    age: 31,
+    photoIndex: 0,
+    vibes: ["Dinner Date", "Gentleman", "Events"],
+    menu: ["Dinner Date", "City Tour", "Events", "Conversation & Drinks"],
+    trustScore: 93,
+    rating: 4.8,
+    verified: true,
+    online: true,
+    city: "Kampala",
+    distance: 2.3,
+    bio: "A true gentleman for the discerning woman. Refined, attentive, and completely discreet.",
+    lat: BASE_LAT + 0.011,
+    lng: BASE_LNG + 0.005,
+    color: "#1a237e",
+    rate: 120000,
+    minBookingHours: 2,
+    availabilityStatus: "now",
+    isSpotlight: false,
+    isTonightsDeal: false,
+    dealDiscount: 0,
+    isNewInTown: false,
+    isHotStreak: true,
+    completedMeetups: 28,
+    responseRate: 95,
+    gender: "male",
+  },
+  {
+    id: "8",
+    name: "Marcus",
+    age: 35,
+    photoIndex: 1,
+    vibes: ["Luxury", "Travel", "Adventure"],
+    menu: ["Dinner Date", "City Tour", "Nightclub", "Pool/Swim"],
+    trustScore: 90,
+    rating: 4.7,
+    verified: true,
+    online: true,
+    city: "Kampala",
+    distance: 1.5,
+    bio: "Cultured, sophisticated, and ready for adventure. Business professional by day.",
+    lat: BASE_LAT - 0.007,
+    lng: BASE_LNG - 0.015,
+    color: "#4a148c",
+    rate: 140000,
+    minBookingHours: 3,
+    availabilityStatus: "tonight",
+    isSpotlight: true,
+    isTonightsDeal: false,
+    dealDiscount: 0,
+    isNewInTown: true,
+    isHotStreak: false,
+    completedMeetups: 15,
+    responseRate: 88,
+    gender: "male",
   },
 ];
 
 const INITIAL_MESSAGES: Record<string, Message[]> = {};
 
+const DEFAULT_FILTERS: Filters = {
+  maxDistance: 20,
+  minRating: 0,
+  verifiedOnly: false,
+  status: "all",
+  maxRate: 500000,
+};
+
 interface AppContextType {
   companions: Companion[];
+  filteredCompanions: (isLadiesMode: boolean) => Companion[];
   matches: Match[];
   messages: Record<string, Message[]>;
   userProfile: UserProfile;
-  addMatch: (companion: Companion) => void;
+  filters: Filters;
+  addMatch: (companion: Companion, type: Match["connectionType"]) => void;
   sendMessage: (matchId: string, text: string) => void;
   toggleAvailability: () => void;
   updateProfile: (updates: Partial<UserProfile>) => void;
+  updateFilters: (updates: Partial<Filters>) => void;
+  resetFilters: () => void;
   likedIds: Set<string>;
   passedIds: Set<string>;
   likeCompanion: (id: string) => void;
   passCompanion: (id: string) => void;
+  walletCredit: (amount: number) => void;
 }
 
 const AppContext = createContext<AppContextType | null>(null);
@@ -179,9 +352,15 @@ const AppContext = createContext<AppContextType | null>(null);
 const DEFAULT_PROFILE: UserProfile = {
   name: "You",
   isCompanion: false,
+  isLadiesMode: false,
+  ghostMode: false,
   availableTonight: false,
   verified: false,
   city: "Kampala",
+  trustedContact: "",
+  walletBalance: 0,
+  totalEarnings: 0,
+  pendingPayout: 0,
 };
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
@@ -190,6 +369,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     useState<Record<string, Message[]>>(INITIAL_MESSAGES);
   const [userProfile, setUserProfile] =
     useState<UserProfile>(DEFAULT_PROFILE);
+  const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
   const [likedIds, setLikedIds] = useState<Set<string>>(new Set());
   const [passedIds, setPassedIds] = useState<Set<string>>(new Set());
 
@@ -199,13 +379,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const loadData = async () => {
     try {
-      const [storedMatches, storedMessages, storedProfile, storedLiked, storedPassed] =
+      const [storedMatches, storedMessages, storedProfile, storedLiked, storedPassed, storedFilters] =
         await Promise.all([
           AsyncStorage.getItem("matches"),
           AsyncStorage.getItem("messages"),
           AsyncStorage.getItem("userProfile"),
           AsyncStorage.getItem("likedIds"),
           AsyncStorage.getItem("passedIds"),
+          AsyncStorage.getItem("filters"),
         ]);
 
       if (storedMatches) {
@@ -223,6 +404,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (storedProfile) setUserProfile(JSON.parse(storedProfile));
       if (storedLiked) setLikedIds(new Set(JSON.parse(storedLiked)));
       if (storedPassed) setPassedIds(new Set(JSON.parse(storedPassed)));
+      if (storedFilters) setFilters(JSON.parse(storedFilters));
     } catch (_) {}
   };
 
@@ -234,15 +416,29 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     await AsyncStorage.setItem("messages", JSON.stringify(newMessages));
   };
 
-  const addMatch = useCallback((companion: Companion) => {
+  const filteredCompanions = useCallback((isLadiesMode: boolean): Companion[] => {
+    return COMPANIONS.filter((c) => {
+      if (isLadiesMode && c.gender !== "male") return false;
+      if (!isLadiesMode && c.gender !== "female") return false;
+      if (c.distance > filters.maxDistance) return false;
+      if (c.rating < filters.minRating) return false;
+      if (filters.verifiedOnly && !c.verified) return false;
+      if (filters.status !== "all" && c.availabilityStatus !== filters.status) return false;
+      if (c.rate > filters.maxRate) return false;
+      return true;
+    });
+  }, [filters]);
+
+  const addMatch = useCallback((companion: Companion, type: Match["connectionType"] = "standard") => {
     setMatches((prev) => {
       if (prev.some((m) => m.companion.id === companion.id)) return prev;
       const newMatch: Match = {
         id: Date.now().toString(),
         companion,
-        lastMessage: "Say hello tonight",
+        lastMessage: type === "paidDm" ? "Paid DM sent" : "Connection requested",
         lastMessageTime: new Date(),
-        unread: 0,
+        unread: 1,
+        connectionType: type,
       };
       const updated = [newMatch, ...prev];
       saveMatches(updated);
@@ -275,11 +471,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     setTimeout(() => {
       const replies = [
-        "Tonight sounds perfect",
+        "Tonight sounds perfect ✨",
         "I'm available from 9pm",
         "Let's meet at the venue",
         "I'll send you my location",
         "Looking forward to it",
+        "My rate is confirmed, see you then",
       ];
       const reply: Message = {
         id: Date.now().toString() + Math.random().toString(36).substr(2, 5),
@@ -321,6 +518,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
+  const updateFilters = useCallback((updates: Partial<Filters>) => {
+    setFilters((prev) => {
+      const updated = { ...prev, ...updates };
+      AsyncStorage.setItem("filters", JSON.stringify(updated));
+      return updated;
+    });
+  }, []);
+
+  const resetFilters = useCallback(() => {
+    setFilters(DEFAULT_FILTERS);
+    AsyncStorage.removeItem("filters");
+  }, []);
+
   const likeCompanion = useCallback((id: string) => {
     setLikedIds((prev) => {
       const updated = new Set(prev);
@@ -328,9 +538,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       AsyncStorage.setItem("likedIds", JSON.stringify([...updated]));
       return updated;
     });
-    const companion = COMPANIONS.find((c) => c.id === id);
-    if (companion) addMatch(companion);
-  }, [addMatch]);
+  }, []);
 
   const passCompanion = useCallback((id: string) => {
     setPassedIds((prev) => {
@@ -341,21 +549,38 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
+  const walletCredit = useCallback((amount: number) => {
+    setUserProfile((prev) => {
+      const updated = {
+        ...prev,
+        totalEarnings: prev.totalEarnings + amount,
+        pendingPayout: prev.pendingPayout + amount,
+      };
+      AsyncStorage.setItem("userProfile", JSON.stringify(updated));
+      return updated;
+    });
+  }, []);
+
   return (
     <AppContext.Provider
       value={{
         companions: COMPANIONS,
+        filteredCompanions,
         matches,
         messages,
         userProfile,
+        filters,
         addMatch,
         sendMessage,
         toggleAvailability,
         updateProfile,
+        updateFilters,
+        resetFilters,
         likedIds,
         passedIds,
         likeCompanion,
         passCompanion,
+        walletCredit,
       }}
     >
       {children}
@@ -367,4 +592,8 @@ export function useApp() {
   const ctx = useContext(AppContext);
   if (!ctx) throw new Error("useApp must be used inside AppProvider");
   return ctx;
+}
+
+export function formatUGX(amount: number): string {
+  return `UGX ${amount.toLocaleString()}`;
 }

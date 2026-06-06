@@ -1,4 +1,5 @@
-import { Ionicons } from "@expo/vector-icons";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import {
@@ -13,29 +14,104 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
-import { COMPANIONS, Companion, useApp } from "@/context/AppContext";
+import { Companion, useApp } from "@/context/AppContext";
 import { TrustBadge } from "@/components/TrustBadge";
+import { FilterModal } from "@/components/FilterModal";
 
-const CITIES = ["Kampala", "Nairobi", "Dubai", "London", "Paris"];
+const CITIES = ["Kampala", "Nairobi", "Dubai", "London", "Nairobi", "Mbarara", "Entebbe"];
 
-function CompanionPinCard({ companion, onClose }: { companion: Companion; onClose: () => void }) {
+const STATUS_COLOR: Record<string, string> = {
+  now: "#22c55e",
+  tonight: "#f5a623",
+  offline: "#6b6b8a",
+};
+
+function MapPinView({
+  companion,
+  isSelected,
+  onPress,
+  pulseAnim,
+}: {
+  companion: Companion;
+  isSelected: boolean;
+  onPress: () => void;
+  pulseAnim?: Animated.Value;
+}) {
   const colors = useColors();
+  const dotColor = STATUS_COLOR[companion.availabilityStatus];
+
   return (
-    <Pressable style={[styles.pinCard, { backgroundColor: colors.card, borderColor: colors.border }]} onPress={() => { onClose(); router.push(`/companion/${companion.id}`); }}>
+    <TouchableOpacity
+      style={[
+        styles.pin,
+        {
+          backgroundColor: isSelected ? colors.primary : companion.color,
+          borderColor: isSelected ? "#fff" : dotColor,
+          borderWidth: isSelected ? 2.5 : 1.5,
+          opacity: companion.availabilityStatus === "offline" ? 0.5 : 1,
+        },
+      ]}
+      onPress={onPress}
+      activeOpacity={0.8}
+    >
+      {companion.isSpotlight && (
+        <View style={styles.crownBadge}>
+          <Ionicons name="star" size={8} color="#f5a623" />
+        </View>
+      )}
+      {companion.isTonightsDeal && pulseAnim && (
+        <Animated.View style={[styles.dealRing, { borderColor: "#f5a623", transform: [{ scale: pulseAnim }], opacity: pulseAnim.interpolate({ inputRange: [1, 1.4], outputRange: [0.8, 0] }) }]} />
+      )}
+      <Text style={styles.pinInitial}>{companion.name[0]}</Text>
+    </TouchableOpacity>
+  );
+}
+
+function BadgeRow({ companion, colors }: { companion: Companion; colors: ReturnType<typeof useColors> }) {
+  return (
+    <View style={styles.badgeRow}>
+      {companion.isHotStreak && (
+        <View style={[styles.badge, { backgroundColor: "rgba(229,57,53,0.15)", borderColor: "#e53935" }]}>
+          <Ionicons name="flame" size={10} color="#e53935" />
+          <Text style={[styles.badgeText, { color: "#e53935" }]}>Hot Streak</Text>
+        </View>
+      )}
+      {companion.isNewInTown && (
+        <View style={[styles.badge, { backgroundColor: "rgba(33,150,243,0.15)", borderColor: "#2196f3" }]}>
+          <Ionicons name="sparkles" size={10} color="#2196f3" />
+          <Text style={[styles.badgeText, { color: "#2196f3" }]}>New in Town</Text>
+        </View>
+      )}
+      {companion.isTonightsDeal && (
+        <View style={[styles.badge, { backgroundColor: "rgba(245,166,35,0.15)", borderColor: "#f5a623" }]}>
+          <Ionicons name="flash" size={10} color="#f5a623" />
+          <Text style={[styles.badgeText, { color: "#f5a623" }]}>{companion.dealDiscount}% Deal</Text>
+        </View>
+      )}
+    </View>
+  );
+}
+
+function CompanionPinCard({ companion, onClose, colors }: { companion: Companion; onClose: () => void; colors: ReturnType<typeof useColors> }) {
+  const dotColor = STATUS_COLOR[companion.availabilityStatus];
+  return (
+    <Pressable
+      style={[styles.pinCard, { backgroundColor: colors.card, borderColor: companion.isTonightsDeal ? "#f5a623" : colors.border }]}
+      onPress={() => { onClose(); router.push(`/companion/${companion.id}`); }}
+    >
       <View style={[styles.pinCardAvatar, { backgroundColor: companion.color }]}>
         <Text style={styles.pinCardInitial}>{companion.name[0]}</Text>
-        {companion.online && <View style={[styles.onlineDot, { borderColor: colors.card }]} />}
+        <View style={[styles.statusDot, { backgroundColor: dotColor, borderColor: colors.card }]} />
       </View>
       <View style={styles.pinCardInfo}>
-        <Text style={[styles.pinCardName, { color: colors.foreground }]}>{companion.name}, {companion.age}</Text>
-        <Text style={[styles.pinCardCity, { color: colors.mutedForeground }]}>{companion.distance} km away</Text>
-        <View style={styles.vibeRow}>
-          {companion.vibes.slice(0, 2).map((v) => (
-            <View key={v} style={[styles.vibePill, { backgroundColor: colors.muted }]}>
-              <Text style={[styles.vibeText, { color: colors.mutedForeground }]}>{v}</Text>
-            </View>
-          ))}
+        <View style={styles.pinNameRow}>
+          <Text style={[styles.pinCardName, { color: colors.foreground }]}>{companion.name}, {companion.age}</Text>
+          {companion.isSpotlight && <Ionicons name="star" size={12} color="#f5a623" />}
         </View>
+        <Text style={[styles.pinCardDist, { color: colors.mutedForeground }]}>
+          {companion.distance} km · UGX {(companion.rate / 1000).toFixed(0)}k/hr
+        </Text>
+        <BadgeRow companion={companion} colors={colors} />
       </View>
       <View style={styles.pinCardRight}>
         <TrustBadge score={companion.trustScore} size="sm" />
@@ -45,90 +121,87 @@ function CompanionPinCard({ companion, onClose }: { companion: Companion; onClos
   );
 }
 
-function MapPlaceholder({ companions, selectedId, onSelect }: {
-  companions: Companion[];
-  selectedId: string | null;
-  onSelect: (id: string) => void;
-}) {
-  const colors = useColors();
-  return (
-    <View style={[styles.mapPlaceholder, { backgroundColor: colors.muted }]}>
-      <View style={styles.cityGrid}>
-        {companions.filter(c => c.online).map((c, i) => {
-          const x = 15 + ((i * 47 + 23) % 70);
-          const y = 10 + ((i * 61 + 15) % 80);
-          return (
-            <TouchableOpacity
-              key={c.id}
-              style={[
-                styles.mapPin,
-                { left: `${x}%`, top: `${y}%`, backgroundColor: selectedId === c.id ? colors.primary : c.color },
-              ]}
-              onPress={() => onSelect(c.id)}
-            >
-              <Text style={styles.mapPinText}>{c.name[0]}</Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
-      <View style={[styles.mapLabel, { backgroundColor: colors.card }]}>
-        <Ionicons name="map-outline" size={14} color={colors.mutedForeground} />
-        <Text style={[styles.mapLabelText, { color: colors.mutedForeground }]}>Live Map</Text>
-      </View>
-    </View>
-  );
-}
-
 export default function MapScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { companions } = useApp();
+  const { filteredCompanions, userProfile, updateProfile, filters } = useApp();
   const [selectedCity, setSelectedCity] = useState("Kampala");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showCityPicker, setShowCityPicker] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
   const pulseAnim = useRef(new Animated.Value(1)).current;
+  const dealPulse = useRef(new Animated.Value(1)).current;
 
-  const onlineCount = companions.filter((c) => c.online).length;
+  const companions = filteredCompanions(userProfile.isLadiesMode);
+  const onlineNow = companions.filter((c) => c.availabilityStatus === "now").length;
+  const trending = [...companions].sort((a, b) => b.completedMeetups - a.completedMeetups).slice(0, 4);
   const selectedCompanion = companions.find((c) => c.id === selectedId) ?? null;
 
+  const activeFilterCount = [
+    filters.maxDistance < 50,
+    filters.minRating > 0,
+    filters.verifiedOnly,
+    filters.status !== "all",
+    filters.maxRate < 500000,
+  ].filter(Boolean).length;
+
   useEffect(() => {
-    const pulse = Animated.loop(
+    const liveP = Animated.loop(
       Animated.sequence([
-        Animated.timing(pulseAnim, { toValue: 1.3, duration: 900, useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 1.4, duration: 900, useNativeDriver: true }),
         Animated.timing(pulseAnim, { toValue: 1, duration: 900, useNativeDriver: true }),
       ])
     );
-    pulse.start();
-    return () => pulse.stop();
+    const dealP = Animated.loop(
+      Animated.sequence([
+        Animated.timing(dealPulse, { toValue: 1.6, duration: 700, useNativeDriver: true }),
+        Animated.timing(dealPulse, { toValue: 1, duration: 700, useNativeDriver: true }),
+      ])
+    );
+    liveP.start();
+    dealP.start();
+    return () => { liveP.stop(); dealP.stop(); };
   }, []);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <View
-        style={[
-          styles.header,
-          {
-            paddingTop: Platform.OS === "web" ? 67 : insets.top,
-            backgroundColor: colors.background,
-            borderBottomColor: colors.border,
-          },
-        ]}
-      >
+      {/* Header */}
+      <View style={[styles.header, { paddingTop: Platform.OS === "web" ? 67 : insets.top, backgroundColor: colors.background, borderBottomColor: colors.border }]}>
         <TouchableOpacity
           style={[styles.cityButton, { borderColor: colors.border, backgroundColor: colors.card }]}
           onPress={() => setShowCityPicker(!showCityPicker)}
         >
-          <Ionicons name="location" size={14} color={colors.primary} />
+          <Ionicons name="location" size={13} color={colors.primary} />
           <Text style={[styles.cityText, { color: colors.foreground }]}>{selectedCity}</Text>
-          <Ionicons name="chevron-down" size={14} color={colors.mutedForeground} />
+          <Ionicons name="chevron-down" size={13} color={colors.mutedForeground} />
         </TouchableOpacity>
 
-        <View style={[styles.liveChip, { backgroundColor: "rgba(255,45,126,0.15)" }]}>
-          <Animated.View style={[styles.liveDot, { transform: [{ scale: pulseAnim }] }]} />
-          <Text style={[styles.liveText, { color: colors.primary }]}>{onlineCount} live tonight</Text>
+        <View style={styles.headerRight}>
+          {userProfile.ghostMode && (
+            <View style={[styles.ghostChip, { backgroundColor: "rgba(107,107,138,0.2)" }]}>
+              <Ionicons name="eye-off" size={12} color={colors.mutedForeground} />
+              <Text style={[styles.ghostChipText, { color: colors.mutedForeground }]}>Ghost</Text>
+            </View>
+          )}
+          <View style={[styles.liveChip, { backgroundColor: "rgba(255,45,126,0.12)" }]}>
+            <Animated.View style={[styles.liveDot, { transform: [{ scale: pulseAnim }] }]} />
+            <Text style={[styles.liveText, { color: colors.primary }]}>{onlineNow} live</Text>
+          </View>
+          <TouchableOpacity
+            style={[styles.filterBtn, { backgroundColor: activeFilterCount > 0 ? "rgba(255,45,126,0.15)" : colors.card, borderColor: activeFilterCount > 0 ? colors.primary : colors.border }]}
+            onPress={() => setShowFilters(true)}
+          >
+            <Ionicons name="options" size={16} color={activeFilterCount > 0 ? colors.primary : colors.foreground} />
+            {activeFilterCount > 0 && (
+              <View style={[styles.filterBadge, { backgroundColor: colors.primary }]}>
+                <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
         </View>
       </View>
 
+      {/* City picker */}
       {showCityPicker && (
         <View style={[styles.cityPicker, { backgroundColor: colors.card, borderColor: colors.border }]}>
           {CITIES.map((city) => (
@@ -137,45 +210,121 @@ export default function MapScreen() {
               style={[styles.cityOption, selectedCity === city && { backgroundColor: colors.muted }]}
               onPress={() => { setSelectedCity(city); setShowCityPicker(false); }}
             >
-              <Text style={[styles.cityOptionText, { color: selectedCity === city ? colors.primary : colors.foreground }]}>
-                {city}
-              </Text>
+              <Text style={[styles.cityOptionText, { color: selectedCity === city ? colors.primary : colors.foreground }]}>{city}</Text>
             </TouchableOpacity>
           ))}
         </View>
       )}
 
-      <MapPlaceholder
-        companions={companions}
-        selectedId={selectedId}
-        onSelect={(id) => setSelectedId(selectedId === id ? null : id)}
-      />
+      {/* Ladies Mode banner */}
+      {userProfile.isLadiesMode && (
+        <View style={[styles.ladiesBanner, { backgroundColor: "rgba(33,150,243,0.12)", borderColor: "rgba(33,150,243,0.3)" }]}>
+          <Ionicons name="sparkles" size={14} color="#2196f3" />
+          <Text style={[styles.ladiesBannerText, { color: "#2196f3" }]}>Ladies Mode — showing Gentleman Companions only</Text>
+        </View>
+      )}
 
+      {/* Map */}
+      <View style={[styles.mapArea, { backgroundColor: "#0a0f1a" }]}>
+        {/* Grid lines */}
+        <View style={StyleSheet.absoluteFill} pointerEvents="none">
+          {[0.2, 0.4, 0.6, 0.8].map((pos) => (
+            <View key={`h${pos}`} style={[styles.gridLine, styles.gridLineH, { top: `${pos * 100}%`, backgroundColor: "rgba(44,40,69,0.4)" }]} />
+          ))}
+          {[0.2, 0.4, 0.6, 0.8].map((pos) => (
+            <View key={`v${pos}`} style={[styles.gridLine, styles.gridLineV, { left: `${pos * 100}%`, backgroundColor: "rgba(44,40,69,0.4)" }]} />
+          ))}
+        </View>
+
+        {/* Companion pins */}
+        {companions.map((c, i) => {
+          const x = 10 + ((i * 47 + 23) % 80);
+          const y = 8 + ((i * 61 + 15) % 84);
+          return (
+            <View key={c.id} style={{ position: "absolute", left: `${x}%`, top: `${y}%` } as never}>
+              <MapPinView
+                companion={c}
+                isSelected={selectedId === c.id}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setSelectedId(selectedId === c.id ? null : c.id);
+                }}
+                pulseAnim={c.isTonightsDeal ? dealPulse : undefined}
+              />
+            </View>
+          );
+        })}
+
+        {/* Map legend */}
+        <View style={[styles.legend, { backgroundColor: "rgba(8,8,16,0.85)" }]}>
+          {[
+            { color: "#22c55e", label: "Now" },
+            { color: "#f5a623", label: "Tonight" },
+            { color: "#6b6b8a", label: "Offline" },
+          ].map(({ color, label }) => (
+            <View key={label} style={styles.legendItem}>
+              <View style={[styles.legendDot, { backgroundColor: color }]} />
+              <Text style={[styles.legendText, { color: "rgba(255,255,255,0.6)" }]}>{label}</Text>
+            </View>
+          ))}
+        </View>
+
+        {/* Ghost Mode toggle */}
+        <TouchableOpacity
+          style={[styles.ghostToggle, {
+            backgroundColor: userProfile.ghostMode ? "rgba(107,107,138,0.3)" : "rgba(8,8,16,0.8)",
+            borderColor: userProfile.ghostMode ? colors.mutedForeground : "rgba(44,40,69,0.6)",
+          }]}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            updateProfile({ ghostMode: !userProfile.ghostMode });
+          }}
+        >
+          <Ionicons name={userProfile.ghostMode ? "eye-off" : "eye"} size={16} color={userProfile.ghostMode ? colors.mutedForeground : "#fff"} />
+          <Text style={[styles.ghostToggleText, { color: userProfile.ghostMode ? colors.mutedForeground : "#fff" }]}>
+            {userProfile.ghostMode ? "Ghost On" : "Ghost Mode"}
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Selected pin card */}
       {selectedCompanion && (
         <View style={styles.pinCardContainer}>
-          <CompanionPinCard companion={selectedCompanion} onClose={() => setSelectedId(null)} />
+          <CompanionPinCard companion={selectedCompanion} onClose={() => setSelectedId(null)} colors={colors} />
         </View>
       )}
 
-      <View style={[styles.nearbySection, { backgroundColor: colors.background, borderTopColor: colors.border }]}>
-        <Text style={[styles.nearbySectionTitle, { color: colors.foreground }]}>Nearby Tonight</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.nearbyScroll}>
-          {companions.filter((c) => c.online).map((c) => (
-            <TouchableOpacity
-              key={c.id}
-              style={[styles.nearbyCard, { backgroundColor: colors.card, borderColor: colors.border }]}
-              onPress={() => router.push(`/companion/${c.id}`)}
-            >
-              <View style={[styles.nearbyAvatar, { backgroundColor: c.color }]}>
-                <Text style={styles.nearbyInitial}>{c.name[0]}</Text>
-                <View style={[styles.onlineDot, { borderColor: colors.card, bottom: 0, right: 0 }]} />
-              </View>
-              <Text style={[styles.nearbyName, { color: colors.foreground }]} numberOfLines={1}>{c.name}</Text>
-              <Text style={[styles.nearbyDist, { color: colors.mutedForeground }]}>{c.distance}km</Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+      {/* Bottom section */}
+      <View style={[styles.bottomSection, { backgroundColor: colors.background, borderTopColor: colors.border }]}>
+        {/* Trending Tonight */}
+        <View style={styles.trendingSection}>
+          <View style={styles.trendingHeader}>
+            <Ionicons name="trending-up" size={14} color={colors.primary} />
+            <Text style={[styles.trendingTitle, { color: colors.foreground }]}>Trending Tonight</Text>
+          </View>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.trendingScroll}>
+            {trending.map((c, i) => (
+              <TouchableOpacity
+                key={c.id}
+                style={[styles.trendingCard, { backgroundColor: colors.card, borderColor: c.isSpotlight ? "#f5a623" : colors.border }]}
+                onPress={() => router.push(`/companion/${c.id}`)}
+              >
+                <View style={styles.trendingRank}>
+                  <Text style={[styles.trendingRankNum, { color: i === 0 ? "#f5a623" : colors.mutedForeground }]}>#{i + 1}</Text>
+                </View>
+                <View style={[styles.trendingAvatar, { backgroundColor: c.color }]}>
+                  <Text style={styles.trendingInitial}>{c.name[0]}</Text>
+                  {c.availabilityStatus === "now" && <View style={[styles.trendingDot, { borderColor: colors.card }]} />}
+                </View>
+                <Text style={[styles.trendingName, { color: colors.foreground }]} numberOfLines={1}>{c.name}</Text>
+                <Text style={[styles.trendingMeetups, { color: colors.mutedForeground }]}>{c.completedMeetups} meets</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
       </View>
+
+      <FilterModal visible={showFilters} onClose={() => setShowFilters(false)} />
     </View>
   );
 }
@@ -186,162 +335,254 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingBottom: 12,
+    paddingHorizontal: 14,
+    paddingBottom: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
     zIndex: 10,
   },
   cityButton: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 18,
     borderWidth: 1,
   },
-  cityText: { fontFamily: "Inter_600SemiBold", fontSize: 14 },
+  cityText: { fontFamily: "Inter_600SemiBold", fontSize: 13 },
+  headerRight: { flexDirection: "row", alignItems: "center", gap: 8 },
+  ghostChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 14,
+  },
+  ghostChipText: { fontFamily: "Inter_500Medium", fontSize: 11 },
   liveChip: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 14,
   },
   liveDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
     backgroundColor: "#ff2d7e",
   },
-  liveText: { fontFamily: "Inter_600SemiBold", fontSize: 13 },
+  liveText: { fontFamily: "Inter_600SemiBold", fontSize: 12 },
+  filterBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    position: "relative",
+  },
+  filterBadge: {
+    position: "absolute",
+    top: -4,
+    right: -4,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  filterBadgeText: { color: "#fff", fontSize: 9, fontFamily: "Inter_700Bold" },
   cityPicker: {
     position: "absolute",
     top: 70,
-    left: 16,
+    left: 14,
     zIndex: 100,
-    borderRadius: 12,
+    borderRadius: 14,
     borderWidth: 1,
     overflow: "hidden",
     elevation: 10,
     shadowColor: "#000",
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
   },
   cityOption: { paddingHorizontal: 20, paddingVertical: 12 },
-  cityOptionText: { fontFamily: "Inter_500Medium", fontSize: 15 },
-  mapPlaceholder: {
+  cityOptionText: { fontFamily: "Inter_500Medium", fontSize: 14 },
+  ladiesBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+  },
+  ladiesBannerText: { fontFamily: "Inter_500Medium", fontSize: 12, flex: 1 },
+  mapArea: {
     flex: 1,
     position: "relative",
     overflow: "hidden",
   },
-  cityGrid: { flex: 1, position: "relative" },
-  mapPin: {
-    position: "absolute",
+  gridLine: { position: "absolute" },
+  gridLineH: { left: 0, right: 0, height: 1 },
+  gridLineV: { top: 0, bottom: 0, width: 1 },
+  pin: {
     width: 36,
     height: 36,
     borderRadius: 18,
     alignItems: "center",
     justifyContent: "center",
     shadowColor: "#000",
-    shadowOpacity: 0.4,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 6,
+    shadowOpacity: 0.5,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 8,
+    position: "relative",
   },
-  mapPinText: {
-    color: "#fff",
-    fontFamily: "Inter_700Bold",
-    fontSize: 14,
+  crownBadge: {
+    position: "absolute",
+    top: -6,
+    right: -6,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: "#f5a623",
+    alignItems: "center",
+    justifyContent: "center",
   },
-  mapLabel: {
+  dealRing: {
+    position: "absolute",
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    borderWidth: 2,
+  },
+  pinInitial: { color: "#fff", fontFamily: "Inter_700Bold", fontSize: 14, zIndex: 1 },
+  legend: {
     position: "absolute",
     bottom: 12,
-    right: 12,
+    left: 12,
     flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
+    gap: 10,
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 10,
-    opacity: 0.85,
   },
-  mapLabelText: { fontSize: 12, fontFamily: "Inter_500Medium" },
+  legendItem: { flexDirection: "row", alignItems: "center", gap: 4 },
+  legendDot: { width: 7, height: 7, borderRadius: 4 },
+  legendText: { fontSize: 10, fontFamily: "Inter_500Medium" },
+  ghostToggle: {
+    position: "absolute",
+    top: 12,
+    right: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+  ghostToggleText: { fontFamily: "Inter_600SemiBold", fontSize: 12 },
   pinCardContainer: {
     position: "absolute",
-    bottom: 200,
-    left: 16,
-    right: 16,
+    bottom: 196,
+    left: 14,
+    right: 14,
     zIndex: 20,
   },
   pinCard: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 14,
+    padding: 12,
     borderRadius: 16,
     borderWidth: 1,
     shadowColor: "#000",
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 8,
+    shadowOpacity: 0.4,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 10,
   },
   pinCardAvatar: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  pinCardInitial: { color: "#fff", fontFamily: "Inter_700Bold", fontSize: 20 },
-  onlineDot: {
-    position: "absolute",
-    bottom: 2,
-    right: 2,
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: "#22c55e",
-    borderWidth: 2,
-  },
-  pinCardInfo: { flex: 1, marginLeft: 12, gap: 4 },
-  pinCardName: { fontFamily: "Inter_600SemiBold", fontSize: 15 },
-  pinCardCity: { fontFamily: "Inter_400Regular", fontSize: 13 },
-  vibeRow: { flexDirection: "row", gap: 4, flexWrap: "wrap" },
-  vibePill: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 },
-  vibeText: { fontSize: 11, fontFamily: "Inter_500Medium" },
-  pinCardRight: { alignItems: "center", marginLeft: 8 },
-  nearbySection: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    paddingTop: 12,
-    paddingBottom: Platform.OS === "web" ? 34 : 0,
-  },
-  nearbySectionTitle: {
-    fontFamily: "Inter_600SemiBold",
-    fontSize: 15,
-    paddingHorizontal: 16,
-    marginBottom: 10,
-  },
-  nearbyScroll: { paddingHorizontal: 16, paddingBottom: 16, gap: 12 },
-  nearbyCard: {
-    alignItems: "center",
-    padding: 12,
-    borderRadius: 14,
-    borderWidth: 1,
-    width: 80,
-    gap: 6,
-  },
-  nearbyAvatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     alignItems: "center",
     justifyContent: "center",
     position: "relative",
   },
-  nearbyInitial: { color: "#fff", fontFamily: "Inter_700Bold", fontSize: 18 },
-  nearbyName: { fontFamily: "Inter_600SemiBold", fontSize: 12, textAlign: "center" },
-  nearbyDist: { fontFamily: "Inter_400Regular", fontSize: 11 },
+  pinCardInitial: { color: "#fff", fontFamily: "Inter_700Bold", fontSize: 18 },
+  statusDot: {
+    position: "absolute",
+    bottom: 1,
+    right: 1,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    borderWidth: 2,
+  },
+  pinCardInfo: { flex: 1, marginLeft: 10, gap: 3 },
+  pinNameRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  pinCardName: { fontFamily: "Inter_600SemiBold", fontSize: 14 },
+  pinCardDist: { fontFamily: "Inter_400Regular", fontSize: 12 },
+  badgeRow: { flexDirection: "row", gap: 4, flexWrap: "wrap" },
+  badge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  badgeText: { fontSize: 10, fontFamily: "Inter_600SemiBold" },
+  pinCardRight: { alignItems: "center", marginLeft: 6 },
+  bottomSection: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingBottom: Platform.OS === "web" ? 34 : 0,
+  },
+  trendingSection: { paddingTop: 10 },
+  trendingHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 14,
+    marginBottom: 8,
+  },
+  trendingTitle: { fontFamily: "Inter_600SemiBold", fontSize: 14 },
+  trendingScroll: { paddingHorizontal: 14, paddingBottom: 12, gap: 10 },
+  trendingCard: {
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+    width: 80,
+    gap: 4,
+  },
+  trendingRank: { alignSelf: "flex-start" },
+  trendingRankNum: { fontFamily: "Inter_700Bold", fontSize: 11 },
+  trendingAvatar: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: "center",
+    justifyContent: "center",
+    position: "relative",
+  },
+  trendingInitial: { color: "#fff", fontFamily: "Inter_700Bold", fontSize: 15 },
+  trendingDot: {
+    position: "absolute",
+    bottom: 0,
+    right: 0,
+    width: 11,
+    height: 11,
+    borderRadius: 6,
+    backgroundColor: "#22c55e",
+    borderWidth: 2,
+  },
+  trendingName: { fontFamily: "Inter_600SemiBold", fontSize: 12, textAlign: "center" },
+  trendingMeetups: { fontFamily: "Inter_400Regular", fontSize: 10 },
 });
