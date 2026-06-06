@@ -121,6 +121,21 @@ function CompanionPinCard({ companion, onClose, colors }: { companion: Companion
   );
 }
 
+const WEATHER_DATA = {
+  Kampala: { icon: "🌦️", label: "Scattered showers · 22°C", tip: "Indoor venues recommended tonight", color: "#3DA9FF" },
+  Nairobi: { icon: "⛅", label: "Partly cloudy · 19°C", tip: "Good evening for rooftop bars", color: "#FF8A3D" },
+  "Dar es Salaam": { icon: "🌙", label: "Clear · 28°C", tip: "Perfect beach night", color: "#1FBF6B" },
+  Entebbe: { icon: "🌧️", label: "Heavy rain · 21°C", tip: "Stay indoors — great night for dinner", color: "#3DA9FF" },
+  default: { icon: "⛅", label: "Partly cloudy · 24°C", tip: "Nice evening ahead", color: "#FF8A3D" },
+};
+
+const POWER_ZONES = [
+  { x: 18, y: 22, label: "Ntinda", status: "out" as const },
+  { x: 62, y: 44, label: "Kabalagala", status: "warning" as const },
+  { x: 80, y: 18, label: "Mukono", status: "out" as const },
+  { x: 38, y: 68, label: "Entebbe Rd", status: "warning" as const },
+];
+
 export default function MapScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -129,8 +144,12 @@ export default function MapScreen() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showCityPicker, setShowCityPicker] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
+  const [showWeather, setShowWeather] = useState(false);
+  const [showPowerCut, setShowPowerCut] = useState(false);
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const dealPulse = useRef(new Animated.Value(1)).current;
+
+  const weather = (WEATHER_DATA as Record<string, typeof WEATHER_DATA.default>)[selectedCity] ?? WEATHER_DATA.default;
 
   const companions = filteredCompanions(userProfile.isLadiesMode);
   const onlineNow = companions.filter((c) => c.availabilityStatus === "now").length;
@@ -285,7 +304,57 @@ export default function MapScreen() {
             {userProfile.ghostMode ? "Ghost On" : "Ghost Mode"}
           </Text>
         </TouchableOpacity>
+
+        {/* Overlay toggles */}
+        <View style={styles.overlayToggles}>
+          <TouchableOpacity
+            style={[styles.overlayBtn, { backgroundColor: showWeather ? `${weather.color}22` : "rgba(8,8,16,0.8)", borderColor: showWeather ? weather.color : "rgba(44,40,69,0.6)" }]}
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setShowWeather(!showWeather); }}
+          >
+            <Text style={styles.overlayBtnEmoji}>{weather.icon}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.overlayBtn, { backgroundColor: showPowerCut ? "rgba(255,193,7,0.15)" : "rgba(8,8,16,0.8)", borderColor: showPowerCut ? "#FFC107" : "rgba(44,40,69,0.6)" }]}
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setShowPowerCut(!showPowerCut); }}
+          >
+            <Ionicons name={showPowerCut ? "flash" : "flash-outline"} size={15} color={showPowerCut ? "#FFC107" : "rgba(255,255,255,0.6)"} />
+          </TouchableOpacity>
+        </View>
+
+        {/* Power cut zone markers */}
+        {showPowerCut && POWER_ZONES.map((z) => (
+          <View
+            key={z.label}
+            style={[
+              styles.powerZone,
+              {
+                left: `${z.x}%`,
+                top: `${z.y}%`,
+                backgroundColor: z.status === "out" ? "rgba(239,68,68,0.18)" : "rgba(255,193,7,0.14)",
+                borderColor: z.status === "out" ? "rgba(239,68,68,0.5)" : "rgba(255,193,7,0.5)",
+              },
+            ] as never}
+            pointerEvents="none"
+          >
+            <Ionicons name={z.status === "out" ? "flash-off" : "flash"} size={9} color={z.status === "out" ? "#ef4444" : "#FFC107"} />
+            <Text style={[styles.powerZoneText, { color: z.status === "out" ? "#ef4444" : "#FFC107" }]}>{z.label}</Text>
+          </View>
+        ))}
       </View>
+
+      {/* Weather banner */}
+      {showWeather && (
+        <View style={[styles.weatherBanner, { backgroundColor: `${weather.color}18`, borderColor: `${weather.color}40` }]}>
+          <Text style={styles.weatherIcon}>{weather.icon}</Text>
+          <View style={styles.weatherInfo}>
+            <Text style={[styles.weatherLabel, { color: weather.color }]}>{selectedCity} — {weather.label}</Text>
+            <Text style={[styles.weatherTip, { color: colors.mutedForeground }]}>{weather.tip}</Text>
+          </View>
+          <TouchableOpacity onPress={() => setShowWeather(false)}>
+            <Ionicons name="close" size={16} color={colors.mutedForeground} />
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Selected pin card */}
       {selectedCompanion && (
@@ -585,4 +654,42 @@ const styles = StyleSheet.create({
   },
   trendingName: { fontFamily: "Inter_600SemiBold", fontSize: 12, textAlign: "center" },
   trendingMeetups: { fontFamily: "Inter_400Regular", fontSize: 10 },
+  overlayToggles: {
+    position: "absolute",
+    top: 54,
+    right: 12,
+    gap: 6,
+  },
+  overlayBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+  },
+  overlayBtnEmoji: { fontSize: 14 },
+  powerZone: {
+    position: "absolute",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    paddingHorizontal: 7,
+    paddingVertical: 4,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  powerZoneText: { fontFamily: "Inter_700Bold", fontSize: 9 },
+  weatherBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+  },
+  weatherIcon: { fontSize: 22 },
+  weatherInfo: { flex: 1 },
+  weatherLabel: { fontFamily: "Inter_600SemiBold", fontSize: 13 },
+  weatherTip: { fontFamily: "Inter_400Regular", fontSize: 12, marginTop: 1 },
 });
