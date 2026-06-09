@@ -1,5 +1,6 @@
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import * as Location from "expo-location";
 import { router } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import {
@@ -19,6 +20,30 @@ import { TrustBadge } from "@/components/TrustBadge";
 import { FilterModal } from "@/components/FilterModal";
 
 const CITIES = ["Kampala", "Entebbe", "Mbarara", "Gulu", "Jinja", "Nairobi", "Dar es Salaam", "Dubai"];
+
+const CITY_COORDS: Record<string, { lat: number; lng: number }> = {
+  Kampala:        { lat:  0.3476, lng: 32.5825 },
+  Entebbe:        { lat:  0.0512, lng: 32.4637 },
+  Mbarara:        { lat: -0.6073, lng: 30.6573 },
+  Gulu:           { lat:  2.7748, lng: 32.2991 },
+  Jinja:          { lat:  0.4478, lng: 33.2026 },
+  Nairobi:        { lat: -1.2921, lng: 36.8219 },
+  "Dar es Salaam":{ lat: -6.7924, lng: 39.2083 },
+  Dubai:          { lat: 25.2048, lng: 55.2708 },
+};
+
+function nearestCity(lat: number, lng: number): string {
+  let best = "Kampala";
+  let bestDist = Infinity;
+  for (const [city, coords] of Object.entries(CITY_COORDS)) {
+    const dLat = (coords.lat - lat) * (Math.PI / 180);
+    const dLng = (coords.lng - lng) * (Math.PI / 180);
+    const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat * (Math.PI / 180)) * Math.cos(coords.lat * (Math.PI / 180)) * Math.sin(dLng / 2) ** 2;
+    const dist = 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    if (dist < bestDist) { bestDist = dist; best = city; }
+  }
+  return best;
+}
 
 const STATUS_COLOR: Record<string, string> = {
   now: "#22c55e",
@@ -141,6 +166,8 @@ export default function MapScreen() {
   const insets = useSafeAreaInsets();
   const { filteredCompanions, userProfile, updateProfile, filters } = useApp();
   const [selectedCity, setSelectedCity] = useState("Kampala");
+  const [locating, setLocating] = useState(true);
+  const [locationDenied, setLocationDenied] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showCityPicker, setShowCityPicker] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
@@ -148,6 +175,28 @@ export default function MapScreen() {
   const [showPowerCut, setShowPowerCut] = useState(false);
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const dealPulse = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== "granted") {
+          if (!cancelled) { setLocating(false); setLocationDenied(true); }
+          return;
+        }
+        const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        if (!cancelled) {
+          const city = nearestCity(pos.coords.latitude, pos.coords.longitude);
+          setSelectedCity(city);
+          setLocating(false);
+        }
+      } catch {
+        if (!cancelled) setLocating(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   const weather = (WEATHER_DATA as Record<string, typeof WEATHER_DATA.default>)[selectedCity] ?? WEATHER_DATA.default;
 
@@ -187,11 +236,20 @@ export default function MapScreen() {
       {/* Header */}
       <View style={[styles.header, { paddingTop: Platform.OS === "web" ? 67 : insets.top, backgroundColor: colors.background, borderBottomColor: colors.border }]}>
         <TouchableOpacity
-          style={[styles.cityButton, { borderColor: colors.border, backgroundColor: colors.card }]}
+          style={[styles.cityButton, { borderColor: locating ? colors.accent : colors.border, backgroundColor: colors.card }]}
           onPress={() => setShowCityPicker(!showCityPicker)}
         >
-          <Ionicons name="location" size={13} color={colors.primary} />
-          <Text style={[styles.cityText, { color: colors.foreground }]}>{selectedCity}</Text>
+          {locating ? (
+            <>
+              <Ionicons name="locate-outline" size={13} color={colors.accent} />
+              <Text style={[styles.cityText, { color: colors.mutedForeground }]}>Locating…</Text>
+            </>
+          ) : (
+            <>
+              <Ionicons name={locationDenied ? "location-outline" : "navigate"} size={13} color={locationDenied ? colors.mutedForeground : colors.primary} />
+              <Text style={[styles.cityText, { color: colors.foreground }]}>{selectedCity}</Text>
+            </>
+          )}
           <Ionicons name="chevron-down" size={13} color={colors.mutedForeground} />
         </TouchableOpacity>
 
