@@ -16,6 +16,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
 import { Companion, useApp } from "@/context/AppContext";
+
 import { TrustBadge } from "@/components/TrustBadge";
 import { FilterModal } from "@/components/FilterModal";
 
@@ -164,7 +165,7 @@ const POWER_ZONES = [
 export default function MapScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { filteredCompanions, userProfile, updateProfile, filters } = useApp();
+  const { filteredCompanions, userProfile, updateProfile, filters, setUserCity } = useApp();
   const [selectedCity, setSelectedCity] = useState("Kampala");
   const [locating, setLocating] = useState(true);
   const [locationDenied, setLocationDenied] = useState(false);
@@ -189,6 +190,7 @@ export default function MapScreen() {
         if (!cancelled) {
           const city = nearestCity(pos.coords.latitude, pos.coords.longitude);
           setSelectedCity(city);
+          setUserCity(city);
           setLocating(false);
         }
       } catch {

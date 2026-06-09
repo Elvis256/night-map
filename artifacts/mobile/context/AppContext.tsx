@@ -334,6 +334,8 @@ interface AppContextType {
   messages: Record<string, Message[]>;
   userProfile: UserProfile;
   filters: Filters;
+  userCity: string;
+  setUserCity: (city: string) => void;
   addMatch: (companion: Companion, type: Match["connectionType"]) => void;
   sendMessage: (matchId: string, text: string) => void;
   toggleAvailability: () => void;
@@ -372,6 +374,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
   const [likedIds, setLikedIds] = useState<Set<string>>(new Set());
   const [passedIds, setPassedIds] = useState<Set<string>>(new Set());
+  const [userCity, setUserCity] = useState<string>("");
 
   useEffect(() => {
     loadData();
@@ -570,6 +573,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         messages,
         userProfile,
         filters,
+        userCity,
+        setUserCity,
         addMatch,
         sendMessage,
         toggleAvailability,
