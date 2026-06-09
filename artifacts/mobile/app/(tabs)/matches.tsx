@@ -13,6 +13,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
 import { COMPANIONS, Companion, Match, useApp } from "@/context/AppContext";
+import { ChemistryModal } from "@/components/ChemistryModal";
 
 type Tab = "connections" | "favorites" | "stories";
 
@@ -22,7 +23,7 @@ const STORY_DATA = COMPANIONS.filter((c) => c.availabilityStatus !== "offline").
   preview: ["Available tonight 🌙", "Just went online ✨", "New photos added 📷", "Tonight's deal active ⚡"][i % 4],
 }));
 
-function MatchRow({ match }: { match: Match }) {
+function MatchRow({ match, onRate }: { match: Match; onRate: () => void }) {
   const colors = useColors();
   return (
     <TouchableOpacity
@@ -56,6 +57,13 @@ function MatchRow({ match }: { match: Match }) {
           >
             {match.lastMessage.startsWith("🎤") ? "🎤 Voice note" : match.lastMessage}
           </Text>
+          <TouchableOpacity
+            style={[styles.rateBtn, { backgroundColor: "rgba(122,60,255,0.1)", borderColor: "rgba(122,60,255,0.3)" }]}
+            onPress={(e) => { e.stopPropagation(); onRate(); }}
+          >
+            <Ionicons name="flask-outline" size={11} color="#7A3CFF" />
+            <Text style={[styles.rateBtnText, { color: "#7A3CFF" }]}>Rate</Text>
+          </TouchableOpacity>
           {match.unread > 0 && (
             <View style={[styles.unreadBadge, { backgroundColor: colors.primary }]}>
               <Text style={styles.unreadText}>{match.unread}</Text>
@@ -138,6 +146,7 @@ export default function MatchesScreen() {
   const insets = useSafeAreaInsets();
   const { matches } = useApp();
   const [tab, setTab] = useState<Tab>("connections");
+  const [ratingMatch, setRatingMatch] = useState<Match | null>(null);
 
   const favorites = COMPANIONS.filter((c) => c.availabilityStatus !== "offline").slice(0, 5);
 
@@ -194,7 +203,7 @@ export default function MatchesScreen() {
           <FlatList
             data={matches}
             keyExtractor={(item) => item.id}
-            renderItem={({ item }) => <MatchRow match={item} />}
+            renderItem={({ item }) => <MatchRow match={item} onRate={() => setRatingMatch(item)} />}
             contentContainerStyle={{ paddingBottom: Platform.OS === "web" ? 34 : insets.bottom }}
           />
         )
@@ -229,6 +238,15 @@ export default function MatchesScreen() {
           keyExtractor={(item) => item.companion.id}
           renderItem={({ item }) => <StoryRow item={item} />}
           contentContainerStyle={{ paddingBottom: Platform.OS === "web" ? 34 : insets.bottom }}
+        />
+      )}
+
+      {ratingMatch && (
+        <ChemistryModal
+          visible={!!ratingMatch}
+          companionName={ratingMatch.companion.name}
+          companionColor={ratingMatch.companion.color}
+          onClose={() => setRatingMatch(null)}
         />
       )}
     </View>
@@ -383,4 +401,9 @@ const styles = StyleSheet.create({
   },
   liveDot: { width: 6, height: 6, borderRadius: 3 },
   liveTagText: { fontFamily: "Inter_600SemiBold", fontSize: 11 },
+  rateBtn: {
+    flexDirection: "row", alignItems: "center", gap: 3,
+    paddingHorizontal: 7, paddingVertical: 4, borderRadius: 8, borderWidth: 1,
+  },
+  rateBtnText: { fontFamily: "Inter_600SemiBold", fontSize: 10 },
 });

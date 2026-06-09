@@ -148,6 +148,84 @@ export default function ProfileScreen() {
         </TouchableOpacity>
       )}
 
+      {/* Loyalty Points / NightMap Score */}
+      <View style={[styles.loyaltyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <View style={styles.loyaltyRow}>
+          <View style={[styles.loyaltyIcon, { backgroundColor: "rgba(255,138,61,0.12)" }]}>
+            <Ionicons name="flash" size={16} color={colors.accent} />
+          </View>
+          <View style={styles.loyaltyInfo}>
+            <Text style={[styles.loyaltyTitle, { color: colors.foreground }]}>NightMap Score</Text>
+            <Text style={[styles.loyaltyTier, { color: colors.accent }]}>⚡ Silver Member · 340 pts</Text>
+          </View>
+          <View style={[styles.loyaltyBadge, { backgroundColor: "rgba(255,138,61,0.15)", borderColor: "rgba(255,138,61,0.3)" }]}>
+            <Text style={[styles.loyaltyBadgeText, { color: colors.accent }]}>340</Text>
+            <Text style={[styles.loyaltyBadgeSub, { color: colors.accent }]}>pts</Text>
+          </View>
+        </View>
+        <View style={[styles.progressTrack, { backgroundColor: colors.muted }]}>
+          <View style={[styles.progressFill, { backgroundColor: colors.accent, width: "68%" }]} />
+        </View>
+        <View style={styles.tierRow}>
+          {["Bronze", "Silver", "Gold", "Platinum"].map((t, i) => (
+            <Text
+              key={t}
+              style={[
+                styles.tierLabel,
+                { color: i === 1 ? colors.accent : colors.mutedForeground, fontFamily: i === 1 ? "Inter_700Bold" : "Inter_400Regular" },
+              ]}
+            >
+              {t}
+            </Text>
+          ))}
+        </View>
+        <Text style={[styles.progressHint, { color: colors.mutedForeground }]}>160 pts to Gold · Earn by rating meetups & referring friends</Text>
+      </View>
+
+      {/* VIP card */}
+      <TouchableOpacity style={[styles.vipCard, { backgroundColor: "rgba(122,60,255,0.08)", borderColor: "rgba(122,60,255,0.3)" }]}>
+        <View style={styles.vipLeft}>
+          <Ionicons name="diamond" size={20} color="#7A3CFF" />
+          <View>
+            <Text style={[styles.vipTitle, { color: "#7A3CFF" }]}>NightMap VIP</Text>
+            <Text style={[styles.vipSub, { color: colors.mutedForeground }]}>Unlimited connects · Priority listings · 0% platform fee</Text>
+          </View>
+        </View>
+        <View style={[styles.vipPrice, { backgroundColor: "rgba(122,60,255,0.15)" }]}>
+          <Text style={[styles.vipAmt, { color: "#7A3CFF" }]}>UGX 35k</Text>
+          <Text style={[styles.vipPer, { color: "#7A3CFF" }]}>/mo</Text>
+        </View>
+      </TouchableOpacity>
+
+      {/* Who Viewed Me */}
+      <Text style={[styles.sectionHeader, { color: colors.mutedForeground }]}>WHO VIEWED MY PROFILE</Text>
+      <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        {([
+          { name: "Amara", time: "2m ago", color: "#7A3CFF" },
+          { name: "Leila", time: "1h ago", color: "#FF4E62" },
+          { name: "Zara", time: "3h ago", color: "#1FBF6B" },
+          { name: "Hidden User", time: "5h ago", color: "#6b6b8a", hidden: true },
+        ] as const).map((v, i) => (
+          <View key={i} style={[styles.settingRow, { borderBottomColor: colors.border }]}>
+            <View style={[styles.settingIcon, { backgroundColor: v.hidden ? colors.muted : `${v.color}20` }]}>
+              {v.hidden
+                ? <Ionicons name="eye-off-outline" size={17} color={colors.mutedForeground} />
+                : <Text style={{ fontFamily: "Inter_700Bold", fontSize: 14, color: "#fff" }}>{v.name[0]}</Text>}
+            </View>
+            <Text style={[styles.settingLabel, { color: v.hidden ? colors.mutedForeground : colors.foreground }]}>
+              {v.name}
+            </Text>
+            <Text style={[styles.settingValue, { color: colors.mutedForeground }]}>{v.time}</Text>
+            {v.hidden && (
+              <View style={[styles.vipLock, { backgroundColor: "rgba(122,60,255,0.12)" }]}>
+                <Ionicons name="lock-closed" size={10} color="#7A3CFF" />
+                <Text style={[styles.vipLockText, { color: "#7A3CFF" }]}>VIP</Text>
+              </View>
+            )}
+          </View>
+        ))}
+      </View>
+
       {/* Companion wallet */}
       {userProfile.isCompanion && (
         <View style={[styles.walletCard, { backgroundColor: colors.card, borderColor: colors.primary }]}>
@@ -485,4 +563,38 @@ const styles = StyleSheet.create({
   panicTitle: { fontFamily: "Inter_700Bold", fontSize: 16 },
   panicSubtitle: { fontFamily: "Inter_400Regular", fontSize: 12, marginTop: 2 },
   version: { textAlign: "center", fontSize: 12, fontFamily: "Inter_400Regular", paddingTop: 4 },
+  loyaltyCard: {
+    marginHorizontal: 16, marginBottom: 14, borderRadius: 16, borderWidth: 1, padding: 14, gap: 10,
+  },
+  loyaltyRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  loyaltyIcon: { width: 36, height: 36, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+  loyaltyInfo: { flex: 1 },
+  loyaltyTitle: { fontFamily: "Inter_700Bold", fontSize: 15 },
+  loyaltyTier: { fontFamily: "Inter_400Regular", fontSize: 12, marginTop: 1 },
+  loyaltyBadge: {
+    alignItems: "center", justifyContent: "center", paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12, borderWidth: 1,
+  },
+  loyaltyBadgeText: { fontFamily: "Inter_700Bold", fontSize: 18, lineHeight: 20 },
+  loyaltyBadgeSub: { fontFamily: "Inter_400Regular", fontSize: 10 },
+  progressTrack: { height: 6, borderRadius: 3, overflow: "hidden" },
+  progressFill: { height: 6, borderRadius: 3 },
+  tierRow: { flexDirection: "row", justifyContent: "space-between" },
+  tierLabel: { fontSize: 10 },
+  progressHint: { fontFamily: "Inter_400Regular", fontSize: 11 },
+  vipCard: {
+    marginHorizontal: 16, marginBottom: 14, borderRadius: 16, borderWidth: 1,
+    flexDirection: "row", alignItems: "center", padding: 14, gap: 10,
+  },
+  vipLeft: { flex: 1, flexDirection: "row", alignItems: "center", gap: 10 },
+  vipTitle: { fontFamily: "Inter_700Bold", fontSize: 15 },
+  vipSub: { fontFamily: "Inter_400Regular", fontSize: 11, marginTop: 2 },
+  vipPrice: {
+    paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10, alignItems: "center",
+  },
+  vipAmt: { fontFamily: "Inter_700Bold", fontSize: 14 },
+  vipPer: { fontFamily: "Inter_400Regular", fontSize: 10 },
+  vipLock: {
+    flexDirection: "row", alignItems: "center", gap: 3, paddingHorizontal: 6, paddingVertical: 3, borderRadius: 8,
+  },
+  vipLockText: { fontFamily: "Inter_700Bold", fontSize: 10 },
 });

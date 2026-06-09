@@ -207,6 +207,15 @@ export default function MapScreen() {
             <Text style={[styles.liveText, { color: colors.primary }]}>{onlineNow} live</Text>
           </View>
           <TouchableOpacity
+            style={[styles.bellBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
+            onPress={() => router.push("/notifications")}
+          >
+            <Ionicons name="notifications-outline" size={17} color={colors.foreground} />
+            <View style={[styles.bellBadge, { backgroundColor: colors.primary }]}>
+              <Text style={styles.bellBadgeText}>4</Text>
+            </View>
+          </TouchableOpacity>
+          <TouchableOpacity
             style={[styles.filterBtn, { backgroundColor: activeFilterCount > 0 ? "rgba(255,78,98,0.15)" : colors.card, borderColor: activeFilterCount > 0 ? colors.primary : colors.border }]}
             onPress={() => setShowFilters(true)}
           >
@@ -365,6 +374,15 @@ export default function MapScreen() {
 
       {/* Bottom section */}
       <View style={[styles.bottomSection, { backgroundColor: colors.background, borderTopColor: colors.border }]}>
+        {/* Radio FAB */}
+        <TouchableOpacity
+          style={[styles.radioFab, { backgroundColor: "rgba(122,60,255,0.15)", borderColor: "rgba(122,60,255,0.5)" }]}
+          onPress={() => router.push("/radio")}
+        >
+          <Ionicons name="radio-outline" size={17} color="#7A3CFF" />
+          <Text style={[styles.radioFabText, { color: "#7A3CFF" }]}>Radio</Text>
+        </TouchableOpacity>
+
         {/* Trending Tonight */}
         <View style={styles.trendingSection}>
           <View style={styles.trendingHeader}>
@@ -654,6 +672,21 @@ const styles = StyleSheet.create({
   },
   trendingName: { fontFamily: "Inter_600SemiBold", fontSize: 12, textAlign: "center" },
   trendingMeetups: { fontFamily: "Inter_400Regular", fontSize: 10 },
+  bellBtn: {
+    width: 34, height: 34, borderRadius: 17, alignItems: "center",
+    justifyContent: "center", borderWidth: 1, position: "relative",
+  },
+  bellBadge: {
+    position: "absolute", top: -4, right: -4, width: 16, height: 16,
+    borderRadius: 8, alignItems: "center", justifyContent: "center",
+  },
+  bellBadgeText: { color: "#fff", fontSize: 9, fontFamily: "Inter_700Bold" },
+  radioFab: {
+    flexDirection: "row", alignItems: "center", gap: 5, alignSelf: "flex-start",
+    paddingHorizontal: 12, paddingVertical: 7, borderRadius: 16, borderWidth: 1,
+    marginHorizontal: 14, marginTop: 10, marginBottom: 2,
+  },
+  radioFabText: { fontFamily: "Inter_600SemiBold", fontSize: 12 },
   overlayToggles: {
     position: "absolute",
     top: 54,
