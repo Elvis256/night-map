@@ -4,10 +4,12 @@ import { router } from "expo-router";
 import React, { useState } from "react";
 import {
   Alert,
+  Linking,
   Modal,
   Platform,
   Pressable,
   ScrollView,
+  Share,
   StyleSheet,
   Switch,
   Text,
@@ -77,6 +79,72 @@ export default function ProfileScreen() {
     setShowEdit(false);
   };
 
+  // Settings modals
+  const [showPrivacy, setShowPrivacy] = useState(false);
+  const [showNotifs, setShowNotifs] = useState(false);
+  const [showLocation, setShowLocation] = useState(false);
+  const [showSupport, setShowSupport] = useState(false);
+  const [showLanguage, setShowLanguage] = useState(false);
+
+  // Privacy toggles (local — would sync to backend in production)
+  const [privShowDistance, setPrivShowDistance] = useState(true);
+  const [privShowOnline, setPrivShowOnline] = useState(true);
+  const [privAllowSaves, setPrivAllowSaves] = useState(true);
+  const [privHideFromSearch, setPrivHideFromSearch] = useState(false);
+
+  // Notification toggles
+  const [notifMessages, setNotifMessages] = useState(true);
+  const [notifBookings, setNotifBookings] = useState(true);
+  const [notifDeals, setNotifDeals] = useState(true);
+  const [notifLive, setNotifLive] = useState(false);
+  const [notifRadio, setNotifRadio] = useState(false);
+
+  const [language, setLanguage] = useState("English");
+  const LANGUAGES = ["English", "Swahili", "French", "Luganda"];
+
+  const handleSignOut = () => {
+    Alert.alert("Sign Out", "Are you sure you want to sign out?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Sign Out",
+        style: "destructive",
+        onPress: async () => {
+          const AsyncStorage = (await import("@react-native-async-storage/async-storage")).default;
+          await AsyncStorage.multiRemove(["onboarded", "userProfile", "matches", "messages", "likedIds", "passedIds", "filters"]);
+          router.replace("/onboarding");
+        },
+      },
+    ]);
+  };
+
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      "Delete Account",
+      "This permanently deletes your profile, connections, and chat history. This cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete Forever",
+          style: "destructive",
+          onPress: async () => {
+            const AsyncStorage = (await import("@react-native-async-storage/async-storage")).default;
+            await AsyncStorage.clear();
+            router.replace("/onboarding");
+          },
+        },
+      ]
+    );
+  };
+
+  const handleShare = async () => {
+    try {
+      await Share.share({
+        message: "Join me on NightMap — East Africa's social companionship platform 🌙\nnightmap.itsolutionsuganda.com",
+        title: "NightMap",
+      });
+    } catch (_) {}
+  };
+
   const handlePanic = () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     setPanicActive(true);
@@ -144,6 +212,153 @@ export default function ProfileScreen() {
           >
             <Text style={styles.editSaveBtnText}>Save Changes</Text>
           </TouchableOpacity>
+        </Pressable>
+      </Pressable>
+    </Modal>
+
+    {/* ── Privacy Modal ─────────────────────────────────── */}
+    <Modal visible={showPrivacy} transparent animationType="slide" onRequestClose={() => setShowPrivacy(false)}>
+      <Pressable style={styles.editBackdrop} onPress={() => setShowPrivacy(false)}>
+        <Pressable style={[styles.editSheet, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View style={[styles.editHandle, { backgroundColor: colors.border }]} />
+          <Text style={[styles.editTitle, { color: colors.foreground }]}>Privacy</Text>
+
+          {([
+            { label: "Show my distance", sub: "Companions see how far you are", val: privShowDistance, set: setPrivShowDistance },
+            { label: "Show online status", sub: "Others can see when you're active", val: privShowOnline, set: setPrivShowOnline },
+            { label: "Allow profile saves", sub: "Let companions save your profile", val: privAllowSaves, set: setPrivAllowSaves },
+            { label: "Hide from search", sub: "Only visible to your connections", val: privHideFromSearch, set: setPrivHideFromSearch },
+          ] as const).map((item) => (
+            <View key={item.label} style={[styles.settingModalRow, { borderBottomColor: colors.border }]}>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.settingModalLabel, { color: colors.foreground }]}>{item.label}</Text>
+                <Text style={[styles.settingModalSub, { color: colors.mutedForeground }]}>{item.sub}</Text>
+              </View>
+              <Switch
+                value={item.val}
+                onValueChange={(v) => { item.set(v); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
+                trackColor={{ false: colors.border, true: "#3DA9FF" }}
+                thumbColor="#fff"
+              />
+            </View>
+          ))}
+
+          <TouchableOpacity style={[styles.editSaveBtn, { backgroundColor: "#3DA9FF" }]} onPress={() => setShowPrivacy(false)}>
+            <Text style={styles.editSaveBtnText}>Done</Text>
+          </TouchableOpacity>
+        </Pressable>
+      </Pressable>
+    </Modal>
+
+    {/* ── Notifications Modal ───────────────────────────── */}
+    <Modal visible={showNotifs} transparent animationType="slide" onRequestClose={() => setShowNotifs(false)}>
+      <Pressable style={styles.editBackdrop} onPress={() => setShowNotifs(false)}>
+        <Pressable style={[styles.editSheet, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View style={[styles.editHandle, { backgroundColor: colors.border }]} />
+          <Text style={[styles.editTitle, { color: colors.foreground }]}>Notifications</Text>
+
+          {([
+            { label: "New messages", sub: "Push alert when someone messages you", val: notifMessages, set: setNotifMessages, color: "#FF4E62" },
+            { label: "Booking requests", sub: "Notify me of new booking activity", val: notifBookings, set: setNotifBookings, color: "#FF8A3D" },
+            { label: "Tonight's deals", sub: "Flash deals from nearby companions", val: notifDeals, set: setNotifDeals, color: "#FFC400" },
+            { label: "Live streams", sub: "When a companion you like goes live", val: notifLive, set: setNotifLive, color: "#7A3CFF" },
+            { label: "Radio updates", sub: "New lounges and radio sessions", val: notifRadio, set: setNotifRadio, color: "#1FBF6B" },
+          ] as const).map((item) => (
+            <View key={item.label} style={[styles.settingModalRow, { borderBottomColor: colors.border }]}>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.settingModalLabel, { color: colors.foreground }]}>{item.label}</Text>
+                <Text style={[styles.settingModalSub, { color: colors.mutedForeground }]}>{item.sub}</Text>
+              </View>
+              <Switch
+                value={item.val}
+                onValueChange={(v) => { item.set(v); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
+                trackColor={{ false: colors.border, true: item.color }}
+                thumbColor="#fff"
+              />
+            </View>
+          ))}
+
+          <TouchableOpacity style={[styles.editSaveBtn, { backgroundColor: "#FF8A3D" }]} onPress={() => setShowNotifs(false)}>
+            <Text style={styles.editSaveBtnText}>Done</Text>
+          </TouchableOpacity>
+        </Pressable>
+      </Pressable>
+    </Modal>
+
+    {/* ── City Modal ────────────────────────────────────── */}
+    <Modal visible={showLocation} transparent animationType="slide" onRequestClose={() => setShowLocation(false)}>
+      <Pressable style={styles.editBackdrop} onPress={() => setShowLocation(false)}>
+        <Pressable style={[styles.editSheet, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View style={[styles.editHandle, { backgroundColor: colors.border }]} />
+          <Text style={[styles.editTitle, { color: colors.foreground }]}>Your City</Text>
+          <Text style={[styles.settingModalSub, { color: colors.mutedForeground, marginTop: -8 }]}>Sets which companions and lounges you see first</Text>
+          <View style={styles.editCityGrid}>
+            {CITIES.map(c => (
+              <TouchableOpacity
+                key={c}
+                style={[styles.editCityChip, { backgroundColor: userProfile.city === c ? "rgba(31,191,107,0.15)" : colors.muted, borderColor: userProfile.city === c ? "#1FBF6B" : colors.border }]}
+                onPress={() => { updateProfile({ city: c }); Haptics.selectionAsync(); setShowLocation(false); }}
+              >
+                <Text style={[styles.editCityText, { color: userProfile.city === c ? "#1FBF6B" : colors.mutedForeground }]}>{c}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </Pressable>
+      </Pressable>
+    </Modal>
+
+    {/* ── Language Modal ────────────────────────────────── */}
+    <Modal visible={showLanguage} transparent animationType="slide" onRequestClose={() => setShowLanguage(false)}>
+      <Pressable style={styles.editBackdrop} onPress={() => setShowLanguage(false)}>
+        <Pressable style={[styles.editSheet, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View style={[styles.editHandle, { backgroundColor: colors.border }]} />
+          <Text style={[styles.editTitle, { color: colors.foreground }]}>Language</Text>
+          <View style={{ gap: 10 }}>
+            {LANGUAGES.map(lang => (
+              <TouchableOpacity
+                key={lang}
+                style={[styles.langRow, { backgroundColor: language === lang ? "rgba(122,60,255,0.12)" : colors.muted, borderColor: language === lang ? "#7A3CFF" : colors.border }]}
+                onPress={() => { setLanguage(lang); Haptics.selectionAsync(); setShowLanguage(false); }}
+              >
+                <Text style={[styles.langLabel, { color: language === lang ? "#7A3CFF" : colors.foreground }]}>{lang}</Text>
+                {language === lang && <Ionicons name="checkmark-circle" size={20} color="#7A3CFF" />}
+              </TouchableOpacity>
+            ))}
+          </View>
+        </Pressable>
+      </Pressable>
+    </Modal>
+
+    {/* ── Support Modal ─────────────────────────────────── */}
+    <Modal visible={showSupport} transparent animationType="slide" onRequestClose={() => setShowSupport(false)}>
+      <Pressable style={styles.editBackdrop} onPress={() => setShowSupport(false)}>
+        <Pressable style={[styles.editSheet, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View style={[styles.editHandle, { backgroundColor: colors.border }]} />
+          <Text style={[styles.editTitle, { color: colors.foreground }]}>Support</Text>
+          <Text style={[styles.settingModalSub, { color: colors.mutedForeground, marginTop: -8 }]}>Available 24/7 across East Africa</Text>
+
+          {([
+            { icon: "logo-whatsapp", label: "WhatsApp Chat", sub: "+256 700 000000", color: "#25D366", action: () => Linking.openURL("https://wa.me/256700000000") },
+            { icon: "mail-outline", label: "Email Support", sub: "support@nightmap.app", color: "#3DA9FF", action: () => Linking.openURL("mailto:support@nightmap.app") },
+            { icon: "globe-outline", label: "Help Center", sub: "nightmap.itsolutionsuganda.com", color: "#FF8A3D", action: () => Linking.openURL("https://nightmap.itsolutionsuganda.com") },
+            { icon: "flag-outline", label: "Report a Problem", sub: "Safety issues, bugs, billing", color: "#FF4E62", action: () => Linking.openURL("mailto:safety@nightmap.app?subject=Report") },
+          ] as const).map((item) => (
+            <TouchableOpacity
+              key={item.label}
+              style={[styles.supportRow, { backgroundColor: colors.muted, borderColor: colors.border }]}
+              onPress={() => { item.action(); setShowSupport(false); }}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.supportIcon, { backgroundColor: `${item.color}18` }]}>
+                <Ionicons name={item.icon as never} size={22} color={item.color} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.settingModalLabel, { color: colors.foreground }]}>{item.label}</Text>
+                <Text style={[styles.settingModalSub, { color: colors.mutedForeground }]}>{item.sub}</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={15} color={colors.mutedForeground} />
+            </TouchableOpacity>
+          ))}
         </Pressable>
       </Pressable>
     </Modal>
@@ -478,16 +693,93 @@ export default function ProfileScreen() {
       {/* App settings */}
       <Text style={[styles.sectionHeader, { color: colors.mutedForeground }]}>SETTINGS</Text>
       <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
-        <SettingRow icon="lock-closed-outline" label="Privacy" onPress={() => {}} />
-        <SettingRow icon="notifications-outline" label="Notifications" onPress={() => {}} />
-        <SettingRow icon="location-outline" label="Location" value={userProfile.city} onPress={() => {}} />
-        <SettingRow icon="help-circle-outline" label="Support" onPress={() => Alert.alert("Support", "WhatsApp: +256 700 000000\nAvailable 24/7")} />
-        <SettingRow icon="document-text-outline" label="Terms of Service" onPress={() => {}} />
+        <SettingRow
+          icon="lock-closed-outline"
+          iconBg="rgba(61,169,255,0.12)"
+          iconColor="#3DA9FF"
+          label="Privacy"
+          value={privHideFromSearch ? "Restricted" : "Standard"}
+          onPress={() => setShowPrivacy(true)}
+        />
+        <SettingRow
+          icon="notifications-outline"
+          iconBg="rgba(255,138,61,0.12)"
+          iconColor="#FF8A3D"
+          label="Notifications"
+          value={[notifMessages, notifBookings, notifDeals, notifLive, notifRadio].filter(Boolean).length + " on"}
+          onPress={() => setShowNotifs(true)}
+        />
+        <SettingRow
+          icon="location-outline"
+          iconBg="rgba(31,191,107,0.12)"
+          iconColor="#1FBF6B"
+          label="City"
+          value={userProfile.city}
+          onPress={() => setShowLocation(true)}
+        />
+        <SettingRow
+          icon="language-outline"
+          iconBg="rgba(122,60,255,0.12)"
+          iconColor="#7A3CFF"
+          label="Language"
+          value={language}
+          onPress={() => setShowLanguage(true)}
+        />
+      </View>
+
+      <Text style={[styles.sectionHeader, { color: colors.mutedForeground }]}>MORE</Text>
+      <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <SettingRow
+          icon="share-social-outline"
+          iconBg="rgba(255,78,98,0.12)"
+          iconColor="#FF4E62"
+          label="Share NightMap"
+          onPress={handleShare}
+        />
+        <SettingRow
+          icon="star-outline"
+          iconBg="rgba(255,196,0,0.12)"
+          iconColor="#FFC400"
+          label="Rate the App"
+          onPress={() => Linking.openURL("https://nightmap.itsolutionsuganda.com")}
+        />
+        <SettingRow
+          icon="help-circle-outline"
+          iconBg="rgba(61,169,255,0.12)"
+          iconColor="#3DA9FF"
+          label="Support"
+          value="24/7"
+          onPress={() => setShowSupport(true)}
+        />
+        <SettingRow
+          icon="document-text-outline"
+          iconBg="rgba(170,179,197,0.12)"
+          iconColor="#AAB3C5"
+          label="Terms of Service"
+          onPress={() => Linking.openURL("https://nightmap.itsolutionsuganda.com/terms")}
+        />
+        <SettingRow
+          icon="shield-outline"
+          iconBg="rgba(170,179,197,0.12)"
+          iconColor="#AAB3C5"
+          label="Privacy Policy"
+          onPress={() => Linking.openURL("https://nightmap.itsolutionsuganda.com/privacy")}
+        />
+      </View>
+
+      <Text style={[styles.sectionHeader, { color: colors.mutedForeground }]}>ACCOUNT</Text>
+      <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <SettingRow
           icon="log-out-outline"
           label="Sign Out"
           danger
-          onPress={() => Alert.alert("Sign Out", "Are you sure?", [{ text: "Cancel" }, { text: "Sign Out", style: "destructive" }])}
+          onPress={handleSignOut}
+        />
+        <SettingRow
+          icon="trash-outline"
+          label="Delete Account"
+          danger
+          onPress={handleDeleteAccount}
         />
       </View>
 
@@ -703,4 +995,23 @@ const styles = StyleSheet.create({
   editCityText: { fontFamily: "Inter_500Medium", fontSize: 13 },
   editSaveBtn: { borderRadius: 16, paddingVertical: 15, alignItems: "center", marginTop: 4 },
   editSaveBtnText: { color: "#fff", fontFamily: "Inter_700Bold", fontSize: 16 },
+
+  settingModalRow: {
+    flexDirection: "row", alignItems: "center", gap: 12,
+    paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  settingModalLabel: { fontFamily: "Inter_600SemiBold", fontSize: 14 },
+  settingModalSub: { fontFamily: "Inter_400Regular", fontSize: 12, marginTop: 2 },
+
+  langRow: {
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    padding: 14, borderRadius: 14, borderWidth: 1.5,
+  },
+  langLabel: { fontFamily: "Inter_600SemiBold", fontSize: 15 },
+
+  supportRow: {
+    flexDirection: "row", alignItems: "center", gap: 12,
+    padding: 14, borderRadius: 16, borderWidth: 1,
+  },
+  supportIcon: { width: 44, height: 44, borderRadius: 12, alignItems: "center", justifyContent: "center" },
 });
