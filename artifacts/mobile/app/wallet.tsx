@@ -207,7 +207,7 @@ export default function WalletScreen() {
             </View>
 
             <View style={styles.mobileMoneyRow}>
-              {["MTN", "Airtel", "Visa"].map(p => (
+              {["MTN", "Airtel", "Visa", "MC"].map(p => (
                 <View key={p} style={[styles.mmBadge, { backgroundColor: colors.background, borderColor: colors.border }]}>
                   <Text style={[styles.mmText, { color: colors.foreground }]}>{p}</Text>
                 </View>
@@ -215,13 +215,11 @@ export default function WalletScreen() {
             </View>
 
             <TouchableOpacity
-              style={[styles.primaryBtn, { backgroundColor: selectedTopup ? colors.primary : colors.muted }]}
-              onPress={selectedTopup ? handleTopup : undefined}
+              style={[styles.primaryBtn, { backgroundColor: colors.primary }]}
+              onPress={() => router.push("/payment")}
             >
-              <Ionicons name="wallet-outline" size={17} color="#fff" />
-              <Text style={styles.primaryBtnText}>
-                {selectedTopup ? `Add UGX ${selectedTopup.toLocaleString()}` : "Select an amount"}
-              </Text>
+              <Ionicons name="add-circle-outline" size={17} color="#fff" />
+              <Text style={styles.primaryBtnText}>Add Funds</Text>
             </TouchableOpacity>
           </View>
         )}

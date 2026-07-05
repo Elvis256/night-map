@@ -113,8 +113,8 @@ export default function ProfileScreen() {
         style: "destructive",
         onPress: async () => {
           const AsyncStorage = (await import("@react-native-async-storage/async-storage")).default;
-          await AsyncStorage.multiRemove(["onboarded", "userProfile", "matches", "messages", "likedIds", "passedIds", "filters"]);
-          router.replace("/onboarding");
+          await AsyncStorage.removeItem("authToken");
+          router.replace("/auth/login");
         },
       },
     ]);
@@ -132,7 +132,7 @@ export default function ProfileScreen() {
           onPress: async () => {
             const AsyncStorage = (await import("@react-native-async-storage/async-storage")).default;
             await AsyncStorage.clear();
-            router.replace("/onboarding");
+            router.replace("/auth/register");
           },
         },
       ]

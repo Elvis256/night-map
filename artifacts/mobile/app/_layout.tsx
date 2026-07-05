@@ -25,8 +25,12 @@ const queryClient = new QueryClient();
 function RootLayoutNav() {
   useEffect(() => {
     if (Platform.OS !== "web") {
-      AsyncStorage.getItem("onboarded").then(v => {
-        if (!v) router.replace("/onboarding");
+      AsyncStorage.multiGet(["onboarded", "authToken"]).then(([[, onboarded], [, authToken]]) => {
+        if (!onboarded) {
+          router.replace("/auth/register");
+        } else if (!authToken) {
+          router.replace("/auth/login");
+        }
       });
     }
   }, []);
@@ -35,10 +39,13 @@ function RootLayoutNav() {
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="onboarding" options={{ headerShown: false }} />
+      <Stack.Screen name="auth/login" options={{ headerShown: false }} />
+      <Stack.Screen name="auth/register" options={{ headerShown: false }} />
       <Stack.Screen name="companion/[id]" options={{ headerShown: false, presentation: "card" }} />
       <Stack.Screen name="chat/[id]" options={{ headerShown: false, presentation: "card" }} />
       <Stack.Screen name="verify" options={{ headerShown: false, presentation: "card" }} />
       <Stack.Screen name="wallet" options={{ headerShown: false, presentation: "card" }} />
+      <Stack.Screen name="payment" options={{ headerShown: false, presentation: "card" }} />
       <Stack.Screen name="radio" options={{ headerShown: false, presentation: "modal" }} />
       <Stack.Screen name="live" options={{ headerShown: false, presentation: "modal" }} />
       <Stack.Screen name="notifications" options={{ headerShown: false, presentation: "card" }} />
