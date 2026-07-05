@@ -19,6 +19,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
+import { useLocationCity } from "@/hooks/useLocationCity";
 import { formatUGX, useApp } from "@/context/AppContext";
 
 function SettingRow({
@@ -60,8 +61,6 @@ function SettingRow({
   );
 }
 
-const CITIES = ["Kampala", "Nairobi", "Dar es Salaam", "Entebbe", "Mbarara", "Gulu", "Jinja", "Dubai"];
-
 export default function ProfileScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -72,17 +71,21 @@ export default function ProfileScreen() {
   const [showEdit, setShowEdit] = useState(false);
   const [editName, setEditName] = useState(userProfile.name);
   const [editBio, setEditBio] = useState(userProfile.bio ?? "");
-  const [editCity, setEditCity] = useState(userProfile.city);
 
   const saveEdit = () => {
-    updateProfile({ name: editName.trim() || userProfile.name, bio: editBio.trim(), city: editCity });
+    updateProfile({ name: editName.trim() || userProfile.name, bio: editBio.trim() });
     setShowEdit(false);
   };
+
+  // GPS city detection
+  const { detect: detectCity, status: detectStatus } = useLocationCity((city) => {
+    updateProfile({ city });
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  });
 
   // Settings modals
   const [showPrivacy, setShowPrivacy] = useState(false);
   const [showNotifs, setShowNotifs] = useState(false);
-  const [showLocation, setShowLocation] = useState(false);
   const [showSupport, setShowSupport] = useState(false);
   const [showLanguage, setShowLanguage] = useState(false);
 
@@ -193,19 +196,6 @@ export default function ProfileScreen() {
             numberOfLines={3}
           />
 
-          <Text style={[styles.editLabel, { color: colors.mutedForeground }]}>CITY</Text>
-          <View style={styles.editCityGrid}>
-            {CITIES.map(c => (
-              <TouchableOpacity
-                key={c}
-                style={[styles.editCityChip, { backgroundColor: editCity === c ? "rgba(255,78,98,0.15)" : colors.muted, borderColor: editCity === c ? colors.primary : colors.border }]}
-                onPress={() => { setEditCity(c); Haptics.selectionAsync(); }}
-              >
-                <Text style={[styles.editCityText, { color: editCity === c ? colors.primary : colors.mutedForeground }]}>{c}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
           <TouchableOpacity
             style={[styles.editSaveBtn, { backgroundColor: colors.primary }]}
             onPress={saveEdit}
@@ -281,28 +271,6 @@ export default function ProfileScreen() {
           <TouchableOpacity style={[styles.editSaveBtn, { backgroundColor: "#FF8A3D" }]} onPress={() => setShowNotifs(false)}>
             <Text style={styles.editSaveBtnText}>Done</Text>
           </TouchableOpacity>
-        </Pressable>
-      </Pressable>
-    </Modal>
-
-    {/* ── City Modal ────────────────────────────────────── */}
-    <Modal visible={showLocation} transparent animationType="slide" onRequestClose={() => setShowLocation(false)}>
-      <Pressable style={styles.editBackdrop} onPress={() => setShowLocation(false)}>
-        <Pressable style={[styles.editSheet, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <View style={[styles.editHandle, { backgroundColor: colors.border }]} />
-          <Text style={[styles.editTitle, { color: colors.foreground }]}>Your City</Text>
-          <Text style={[styles.settingModalSub, { color: colors.mutedForeground, marginTop: -8 }]}>Sets which companions and lounges you see first</Text>
-          <View style={styles.editCityGrid}>
-            {CITIES.map(c => (
-              <TouchableOpacity
-                key={c}
-                style={[styles.editCityChip, { backgroundColor: userProfile.city === c ? "rgba(31,191,107,0.15)" : colors.muted, borderColor: userProfile.city === c ? "#1FBF6B" : colors.border }]}
-                onPress={() => { updateProfile({ city: c }); Haptics.selectionAsync(); setShowLocation(false); }}
-              >
-                <Text style={[styles.editCityText, { color: userProfile.city === c ? "#1FBF6B" : colors.mutedForeground }]}>{c}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
         </Pressable>
       </Pressable>
     </Modal>
@@ -714,8 +682,8 @@ export default function ProfileScreen() {
           iconBg="rgba(31,191,107,0.12)"
           iconColor="#1FBF6B"
           label="City"
-          value={userProfile.city}
-          onPress={() => setShowLocation(true)}
+          value={detectStatus === "detecting" ? "Detecting…" : detectStatus === "denied" ? "Permission denied" : userProfile.city}
+          onPress={detectCity}
         />
         <SettingRow
           icon="language-outline"

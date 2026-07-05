@@ -3,6 +3,7 @@ import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
 import React, { useRef, useState } from "react";
 import {
+  ActivityIndicator,
   Animated,
   Dimensions,
   Platform,
@@ -14,10 +15,10 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useApp } from "@/context/AppContext";
+import { Ionicons } from "@expo/vector-icons";
+import { useLocationCity } from "@/hooks/useLocationCity";
 
 const { width: W } = Dimensions.get("window");
-
-const CITIES = ["Kampala", "Nairobi", "Dar es Salaam", "Entebbe", "Mbarara", "Gulu", "Jinja", "Dubai"];
 
 export default function OnboardingScreen() {
   const insets = useSafeAreaInsets();
@@ -26,9 +27,14 @@ export default function OnboardingScreen() {
   const [page, setPage] = useState(0);
   const [role, setRole] = useState<"seeker" | "companion" | null>(null);
   const [name, setName] = useState("");
-  const [city, setCity] = useState("Kampala");
+  const [detectedCity, setDetectedCity] = useState<string | null>(null);
   const slideAnim = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(1)).current;
+
+  const { detect: detectCity, status: detectStatus } = useLocationCity((city) => {
+    setDetectedCity(city);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  });
 
   const goTo = (next: number) => {
     Haptics.selectionAsync();
@@ -47,7 +53,7 @@ export default function OnboardingScreen() {
   const finish = async () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     await AsyncStorage.setItem("onboarded", "true");
-    updateProfile({ name: name.trim() || "Explorer", city, isCompanion: role === "companion" });
+    updateProfile({ name: name.trim() || "Explorer", city: detectedCity ?? "Kampala", isCompanion: role === "companion" });
     router.replace("/(tabs)");
   };
 
@@ -164,20 +170,34 @@ export default function OnboardingScreen() {
 
             <View style={styles.formSection}>
               <Text style={styles.formLabel}>YOUR CITY</Text>
-              <View style={styles.cityGrid}>
-                {CITIES.map(c => (
-                  <TouchableOpacity
-                    key={c}
-                    style={[
-                      styles.cityChip,
-                      { backgroundColor: city === c ? "rgba(255,78,98,0.15)" : "#161923", borderColor: city === c ? "#FF4E62" : "#2A3045" },
-                    ]}
-                    onPress={() => { setCity(c); Haptics.selectionAsync(); }}
-                  >
-                    <Text style={[styles.cityChipText, { color: city === c ? "#FF4E62" : "#AAB3C5" }]}>{c}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
+              <TouchableOpacity
+                style={[styles.detectBtn, detectedCity ? styles.detectBtnDone : null]}
+                onPress={detectCity}
+                disabled={detectStatus === "detecting"}
+                activeOpacity={0.8}
+              >
+                {detectStatus === "detecting" ? (
+                  <ActivityIndicator size="small" color="#1FBF6B" />
+                ) : (
+                  <Ionicons
+                    name={detectedCity ? "checkmark-circle" : "location-outline"}
+                    size={20}
+                    color={detectedCity ? "#1FBF6B" : "#AAB3C5"}
+                  />
+                )}
+                <Text style={[styles.detectBtnText, detectedCity ? { color: "#1FBF6B" } : null]}>
+                  {detectStatus === "detecting"
+                    ? "Locating you…"
+                    : detectStatus === "denied"
+                    ? "Location denied — tap to retry"
+                    : detectedCity
+                    ? detectedCity
+                    : "Tap to detect your city"}
+                </Text>
+              </TouchableOpacity>
+              {detectStatus === "denied" && (
+                <Text style={styles.detectHint}>Enable Location in Settings so NightMap can show nearby companions.</Text>
+              )}
             </View>
 
             {role === "companion" && (
@@ -266,11 +286,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16, paddingVertical: 14,
     color: "#fff", fontFamily: "Inter_400Regular", fontSize: 16,
   },
-  cityGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  cityChip: {
-    borderRadius: 20, borderWidth: 1.5, paddingHorizontal: 14, paddingVertical: 8,
+  detectBtn: {
+    flexDirection: "row", alignItems: "center", gap: 10,
+    backgroundColor: "#161923", borderRadius: 14, borderWidth: 1.5,
+    borderColor: "#2A3045", paddingHorizontal: 16, paddingVertical: 15,
   },
-  cityChipText: { fontFamily: "Inter_500Medium", fontSize: 13 },
+  detectBtnDone: { borderColor: "#1FBF6B", backgroundColor: "rgba(31,191,107,0.08)" },
+  detectBtnText: { fontFamily: "Inter_500Medium", fontSize: 15, color: "#AAB3C5", flex: 1 },
+  detectHint: { fontFamily: "Inter_400Regular", fontSize: 12, color: "#FF4E62", marginTop: 4 },
 
   companionHint: {
     borderRadius: 14, borderWidth: 1, padding: 14,
