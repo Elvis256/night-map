@@ -41,9 +41,10 @@ export default function WalletScreen() {
   const handleTopup = () => {
     if (!selectedTopup) return;
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    walletCredit(selectedTopup);
     Alert.alert(
-      "Top-Up Initiated",
-      `UGX ${selectedTopup.toLocaleString()} via Mobile Money.\n\nYou'll receive a prompt on your phone to confirm payment.`,
+      "Top-Up Successful",
+      `UGX ${selectedTopup.toLocaleString()} has been added to your wallet.`,
       [{ text: "OK" }]
     );
     setSelectedTopup(null);

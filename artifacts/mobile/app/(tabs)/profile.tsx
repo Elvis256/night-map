@@ -4,7 +4,9 @@ import { router } from "expo-router";
 import React, { useState } from "react";
 import {
   Alert,
+  Modal,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Switch,
@@ -56,6 +58,8 @@ function SettingRow({
   );
 }
 
+const CITIES = ["Kampala", "Nairobi", "Dar es Salaam", "Entebbe", "Mbarara", "Gulu", "Jinja", "Dubai"];
+
 export default function ProfileScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -63,6 +67,15 @@ export default function ProfileScreen() {
   const [panicActive, setPanicActive] = useState(false);
   const [contactInput, setContactInput] = useState(userProfile.trustedContact);
   const [showContactInput, setShowContactInput] = useState(false);
+  const [showEdit, setShowEdit] = useState(false);
+  const [editName, setEditName] = useState(userProfile.name);
+  const [editBio, setEditBio] = useState(userProfile.bio ?? "");
+  const [editCity, setEditCity] = useState(userProfile.city);
+
+  const saveEdit = () => {
+    updateProfile({ name: editName.trim() || userProfile.name, bio: editBio.trim(), city: editCity });
+    setShowEdit(false);
+  };
 
   const handlePanic = () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
@@ -80,15 +93,70 @@ export default function ProfileScreen() {
   };
 
   return (
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+
+    {/* ── Edit Profile Modal ─────────────────────────────── */}
+    <Modal visible={showEdit} transparent animationType="slide" onRequestClose={() => setShowEdit(false)}>
+      <Pressable style={styles.editBackdrop} onPress={() => setShowEdit(false)}>
+        <Pressable style={[styles.editSheet, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View style={[styles.editHandle, { backgroundColor: colors.border }]} />
+          <Text style={[styles.editTitle, { color: colors.foreground }]}>Edit Profile</Text>
+
+          <Text style={[styles.editLabel, { color: colors.mutedForeground }]}>DISPLAY NAME</Text>
+          <TextInput
+            style={[styles.editInput, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.muted }]}
+            value={editName}
+            onChangeText={setEditName}
+            placeholder="Your name"
+            placeholderTextColor={colors.mutedForeground}
+            maxLength={30}
+            autoCapitalize="words"
+          />
+
+          <Text style={[styles.editLabel, { color: colors.mutedForeground }]}>BIO</Text>
+          <TextInput
+            style={[styles.editInput, styles.editBioInput, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.muted }]}
+            value={editBio}
+            onChangeText={setEditBio}
+            placeholder="A short intro about yourself…"
+            placeholderTextColor={colors.mutedForeground}
+            maxLength={140}
+            multiline
+            numberOfLines={3}
+          />
+
+          <Text style={[styles.editLabel, { color: colors.mutedForeground }]}>CITY</Text>
+          <View style={styles.editCityGrid}>
+            {CITIES.map(c => (
+              <TouchableOpacity
+                key={c}
+                style={[styles.editCityChip, { backgroundColor: editCity === c ? "rgba(255,78,98,0.15)" : colors.muted, borderColor: editCity === c ? colors.primary : colors.border }]}
+                onPress={() => { setEditCity(c); Haptics.selectionAsync(); }}
+              >
+                <Text style={[styles.editCityText, { color: editCity === c ? colors.primary : colors.mutedForeground }]}>{c}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          <TouchableOpacity
+            style={[styles.editSaveBtn, { backgroundColor: colors.primary }]}
+            onPress={saveEdit}
+          >
+            <Text style={styles.editSaveBtnText}>Save Changes</Text>
+          </TouchableOpacity>
+        </Pressable>
+      </Pressable>
+    </Modal>
+
     <ScrollView
-      style={[styles.container, { backgroundColor: colors.background }]}
+      style={{ flex: 1 }}
       contentContainerStyle={{ paddingBottom: Platform.OS === "web" ? 34 : insets.bottom + 24 }}
       showsVerticalScrollIndicator={false}
     >
       <View style={[styles.header, { paddingTop: Platform.OS === "web" ? 67 : insets.top }]}>
         <Text style={[styles.headerTitle, { color: colors.foreground }]}>Profile</Text>
-        <TouchableOpacity style={[styles.editBtn, { borderColor: colors.border, backgroundColor: colors.card }]} onPress={() => router.push("/wallet")}>
-          <Ionicons name="wallet-outline" size={17} color={colors.foreground} />
+        <TouchableOpacity style={[styles.editBtn, { borderColor: colors.border, backgroundColor: colors.card }]} onPress={() => { setEditName(userProfile.name); setEditBio(userProfile.bio ?? ""); setEditCity(userProfile.city); setShowEdit(true); }}>
+          <Ionicons name="create-outline" size={17} color={colors.foreground} />
         </TouchableOpacity>
       </View>
 
@@ -104,6 +172,10 @@ export default function ProfileScreen() {
           <Ionicons name="location-outline" size={13} color={colors.mutedForeground} />
           <Text style={[styles.profileCity, { color: colors.mutedForeground }]}>{userProfile.city}</Text>
         </View>
+
+        {!!userProfile.bio && (
+          <Text style={[styles.profileBio, { color: colors.mutedForeground }]} numberOfLines={2}>{userProfile.bio}</Text>
+        )}
 
         <View style={styles.statsRow}>
           <View style={styles.stat}>
@@ -421,6 +493,7 @@ export default function ProfileScreen() {
 
       <Text style={[styles.version, { color: colors.mutedForeground }]}>NightMap v1.0 · Uganda · Kenya · Tanzania</Text>
     </ScrollView>
+    </View>
   );
 }
 
@@ -609,4 +682,25 @@ const styles = StyleSheet.create({
     flexDirection: "row", alignItems: "center", gap: 3, paddingHorizontal: 6, paddingVertical: 3, borderRadius: 8,
   },
   vipLockText: { fontFamily: "Inter_700Bold", fontSize: 10 },
+
+  profileBio: { fontFamily: "Inter_400Regular", fontSize: 13, textAlign: "center", lineHeight: 18, paddingHorizontal: 10 },
+
+  editBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.75)", justifyContent: "flex-end" },
+  editSheet: {
+    borderTopLeftRadius: 24, borderTopRightRadius: 24, borderWidth: 1,
+    padding: 22, gap: 14,
+  },
+  editHandle: { width: 40, height: 4, borderRadius: 2, alignSelf: "center", marginBottom: 4 },
+  editTitle: { fontFamily: "Inter_700Bold", fontSize: 20 },
+  editLabel: { fontFamily: "Inter_700Bold", fontSize: 11, letterSpacing: 0.8 },
+  editInput: {
+    borderRadius: 14, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 12,
+    fontFamily: "Inter_400Regular", fontSize: 15,
+  },
+  editBioInput: { minHeight: 80, textAlignVertical: "top" },
+  editCityGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  editCityChip: { borderRadius: 20, borderWidth: 1.5, paddingHorizontal: 13, paddingVertical: 7 },
+  editCityText: { fontFamily: "Inter_500Medium", fontSize: 13 },
+  editSaveBtn: { borderRadius: 16, paddingVertical: 15, alignItems: "center", marginTop: 4 },
+  editSaveBtnText: { color: "#fff", fontFamily: "Inter_700Bold", fontSize: 16 },
 });

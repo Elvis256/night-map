@@ -59,6 +59,7 @@ export interface Message {
 
 export interface UserProfile {
   name: string;
+  bio: string;
   isCompanion: boolean;
   isLadiesMode: boolean;
   ghostMode: boolean;
@@ -336,7 +337,21 @@ const SEEDED_MATCHES: Match[] = [
   },
 ];
 
-const INITIAL_MESSAGES: Record<string, Message[]> = {};
+const NOW = Date.now();
+const INITIAL_MESSAGES: Record<string, Message[]> = {
+  seed1: [
+    { id: "sm1_1", matchId: "seed1", text: "Hi! Saw your profile — you seem like exactly what I'm looking for tonight 🌙", fromMe: true, time: new Date(NOW - 14 * 60 * 1000) },
+    { id: "sm1_2", matchId: "seed1", text: "Hi! Thanks for reaching out 💫 I'm available from 9pm. What did you have in mind?", fromMe: false, time: new Date(NOW - 12 * 60 * 1000) },
+    { id: "sm1_3", matchId: "seed1", text: "Dinner date at a rooftop? Your profile mentioned you love that 😊", fromMe: true, time: new Date(NOW - 10 * 60 * 1000) },
+    { id: "sm1_4", matchId: "seed1", text: "Tonight sounds perfect ✨", fromMe: false, time: new Date(NOW - 7 * 60 * 1000) },
+  ],
+  seed2: [
+    { id: "sm2_1", matchId: "seed2", text: "Hey, what's your rate for tonight?", fromMe: true, time: new Date(NOW - 60 * 60 * 1000) },
+    { id: "sm2_2", matchId: "seed2", text: "UGX 200,000/hr, minimum 2 hours. Available in Kampala tonight.", fromMe: false, time: new Date(NOW - 55 * 60 * 1000) },
+    { id: "sm2_3", matchId: "seed2", text: "That works. Nightclub, 3 hours — I'll send the booking.", fromMe: true, time: new Date(NOW - 50 * 60 * 1000) },
+    { id: "sm2_4", matchId: "seed2", text: "My rate is confirmed, see you then", fromMe: false, time: new Date(NOW - 45 * 60 * 1000) },
+  ],
+};
 
 const DEFAULT_FILTERS: Filters = {
   maxDistance: 20,
@@ -372,6 +387,7 @@ const AppContext = createContext<AppContextType | null>(null);
 
 const DEFAULT_PROFILE: UserProfile = {
   name: "You",
+  bio: "",
   isCompanion: false,
   isLadiesMode: false,
   ghostMode: false,
@@ -573,11 +589,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const walletCredit = useCallback((amount: number) => {
     setUserProfile((prev) => {
-      const updated = {
-        ...prev,
-        totalEarnings: prev.totalEarnings + amount,
-        pendingPayout: prev.pendingPayout + amount,
-      };
+      const updated = prev.isCompanion
+        ? { ...prev, totalEarnings: prev.totalEarnings + amount, pendingPayout: prev.pendingPayout + amount }
+        : { ...prev, walletBalance: prev.walletBalance + amount };
       AsyncStorage.setItem("userProfile", JSON.stringify(updated));
       return updated;
     });
