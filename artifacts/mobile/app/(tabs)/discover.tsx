@@ -18,6 +18,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
 import { COMPANIONS, Companion, useApp } from "@/context/AppContext";
+import { BookingModal } from "@/components/BookingModal";
 import { TrustBadge } from "@/components/TrustBadge";
 
 const COMPANION_PHOTOS = [
@@ -373,6 +374,7 @@ export default function DiscoverScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { companions, likeCompanion, passCompanion, likedIds, passedIds } = useApp();
+  const [bookingFor, setBookingFor] = useState<Companion | null>(null);
   const [mood, setMood] = useState<CategoryValue>(null);
   const [storyCompanion, setStoryCompanion] = useState<Companion | null>(null);
 
@@ -526,7 +528,7 @@ export default function DiscoverScreen() {
           <View style={styles.actionWrap}>
             <TouchableOpacity
               style={[styles.actionBtn, styles.likeBtn, { backgroundColor: "rgba(255,78,98,0.15)", borderColor: colors.primary }]}
-              onPress={() => handleSwipe(true)}
+              onPress={() => { if (queue[0]) setBookingFor(queue[0]); }}
             >
               <Ionicons name="heart" size={26} color={colors.primary} />
             </TouchableOpacity>
@@ -538,6 +540,11 @@ export default function DiscoverScreen() {
       {storyCompanion && (
         <StoryViewer companion={storyCompanion} onClose={() => setStoryCompanion(null)} />
       )}
+      <BookingModal
+        visible={!!bookingFor}
+        companion={bookingFor}
+        onClose={() => setBookingFor(null)}
+      />
     </View>
   );
 }

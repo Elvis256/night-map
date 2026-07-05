@@ -317,6 +317,25 @@ export const COMPANIONS: Companion[] = [
   },
 ];
 
+const SEEDED_MATCHES: Match[] = [
+  {
+    id: "seed1",
+    companion: COMPANIONS[0],
+    lastMessage: "Tonight sounds perfect ✨",
+    lastMessageTime: new Date(Date.now() - 7 * 60 * 1000),
+    unread: 1,
+    connectionType: "standard",
+  },
+  {
+    id: "seed2",
+    companion: COMPANIONS[4],
+    lastMessage: "My rate is confirmed, see you then",
+    lastMessageTime: new Date(Date.now() - 45 * 60 * 1000),
+    unread: 0,
+    connectionType: "super",
+  },
+];
+
 const INITIAL_MESSAGES: Record<string, Message[]> = {};
 
 const DEFAULT_FILTERS: Filters = {
@@ -366,7 +385,7 @@ const DEFAULT_PROFILE: UserProfile = {
 };
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
-  const [matches, setMatches] = useState<Match[]>([]);
+  const [matches, setMatches] = useState<Match[]>(SEEDED_MATCHES);
   const [messages, setMessages] =
     useState<Record<string, Message[]>>(INITIAL_MESSAGES);
   const [userProfile, setUserProfile] =

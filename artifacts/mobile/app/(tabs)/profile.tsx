@@ -87,8 +87,8 @@ export default function ProfileScreen() {
     >
       <View style={[styles.header, { paddingTop: Platform.OS === "web" ? 67 : insets.top }]}>
         <Text style={[styles.headerTitle, { color: colors.foreground }]}>Profile</Text>
-        <TouchableOpacity style={[styles.editBtn, { borderColor: colors.border, backgroundColor: colors.card }]}>
-          <Ionicons name="create-outline" size={17} color={colors.foreground} />
+        <TouchableOpacity style={[styles.editBtn, { borderColor: colors.border, backgroundColor: colors.card }]} onPress={() => router.push("/wallet")}>
+          <Ionicons name="wallet-outline" size={17} color={colors.foreground} />
         </TouchableOpacity>
       </View>
 
@@ -226,33 +226,45 @@ export default function ProfileScreen() {
         ))}
       </View>
 
-      {/* Companion wallet */}
-      {userProfile.isCompanion && (
-        <View style={[styles.walletCard, { backgroundColor: colors.card, borderColor: colors.primary }]}>
-          <View style={styles.walletHeader}>
-            <Ionicons name="wallet" size={18} color={colors.primary} />
-            <Text style={[styles.walletTitle, { color: colors.foreground }]}>Wallet</Text>
-          </View>
-          <View style={styles.walletStats}>
-            <View style={styles.walletStat}>
-              <Text style={[styles.walletAmount, { color: colors.primary }]}>{formatUGX(userProfile.totalEarnings)}</Text>
-              <Text style={[styles.walletLabel, { color: colors.mutedForeground }]}>Total Earned</Text>
-            </View>
-            <View style={[styles.walletDivider, { backgroundColor: colors.border }]} />
-            <View style={styles.walletStat}>
-              <Text style={[styles.walletAmount, { color: colors.accent }]}>{formatUGX(userProfile.pendingPayout)}</Text>
-              <Text style={[styles.walletLabel, { color: colors.mutedForeground }]}>Pending Payout</Text>
-            </View>
-          </View>
-          <TouchableOpacity
-            style={[styles.payoutBtn, { backgroundColor: "rgba(255,78,98,0.12)", borderColor: colors.primary }]}
-            onPress={() => Alert.alert("Payout Request", "Payout via MTN MoMo will be processed within 24 hours.")}
-          >
-            <Ionicons name="phone-portrait-outline" size={15} color={colors.primary} />
-            <Text style={[styles.payoutBtnText, { color: colors.primary }]}>Request MoMo Payout</Text>
-          </TouchableOpacity>
+      {/* Wallet — always visible, links to full wallet screen */}
+      <TouchableOpacity
+        style={[styles.walletCard, { backgroundColor: colors.card, borderColor: userProfile.isCompanion ? colors.primary : colors.border }]}
+        onPress={() => router.push("/wallet")}
+        activeOpacity={0.85}
+      >
+        <View style={styles.walletHeader}>
+          <Ionicons name="wallet" size={18} color={userProfile.isCompanion ? colors.primary : colors.mutedForeground} />
+          <Text style={[styles.walletTitle, { color: colors.foreground }]}>Wallet</Text>
+          <Ionicons name="chevron-forward" size={15} color={colors.mutedForeground} style={{ marginLeft: "auto" }} />
         </View>
-      )}
+        <View style={styles.walletStats}>
+          {userProfile.isCompanion ? (
+            <>
+              <View style={styles.walletStat}>
+                <Text style={[styles.walletAmount, { color: colors.primary }]}>{formatUGX(userProfile.totalEarnings)}</Text>
+                <Text style={[styles.walletLabel, { color: colors.mutedForeground }]}>Total Earned</Text>
+              </View>
+              <View style={[styles.walletDivider, { backgroundColor: colors.border }]} />
+              <View style={styles.walletStat}>
+                <Text style={[styles.walletAmount, { color: colors.accent }]}>{formatUGX(userProfile.pendingPayout)}</Text>
+                <Text style={[styles.walletLabel, { color: colors.mutedForeground }]}>Pending Payout</Text>
+              </View>
+            </>
+          ) : (
+            <>
+              <View style={styles.walletStat}>
+                <Text style={[styles.walletAmount, { color: colors.foreground }]}>{formatUGX(userProfile.walletBalance)}</Text>
+                <Text style={[styles.walletLabel, { color: colors.mutedForeground }]}>Balance</Text>
+              </View>
+              <View style={[styles.walletDivider, { backgroundColor: colors.border }]} />
+              <View style={styles.walletStat}>
+                <Text style={[styles.walletAmount, { color: "#1FBF6B" }]}>+Top Up</Text>
+                <Text style={[styles.walletLabel, { color: colors.mutedForeground }]}>Add Funds</Text>
+              </View>
+            </>
+          )}
+        </View>
+      </TouchableOpacity>
 
       {/* Mode settings */}
       <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>

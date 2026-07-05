@@ -5,8 +5,10 @@ import {
   Inter_700Bold,
   useFonts,
 } from "@expo-google-fonts/inter";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Stack } from "expo-router";
+import { Stack, router } from "expo-router";
+import { Platform } from "react-native";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -21,21 +23,25 @@ SplashScreen.preventAutoHideAsync();
 const queryClient = new QueryClient();
 
 function RootLayoutNav() {
+  useEffect(() => {
+    if (Platform.OS !== "web") {
+      AsyncStorage.getItem("onboarded").then(v => {
+        if (!v) router.replace("/onboarding");
+      });
+    }
+  }, []);
+
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      <Stack.Screen
-        name="companion/[id]"
-        options={{ headerShown: false, presentation: "card" }}
-      />
-      <Stack.Screen
-        name="chat/[id]"
-        options={{ headerShown: false, presentation: "card" }}
-      />
-      <Stack.Screen
-        name="verify"
-        options={{ headerShown: false, presentation: "card" }}
-      />
+      <Stack.Screen name="onboarding" options={{ headerShown: false }} />
+      <Stack.Screen name="companion/[id]" options={{ headerShown: false, presentation: "card" }} />
+      <Stack.Screen name="chat/[id]" options={{ headerShown: false, presentation: "card" }} />
+      <Stack.Screen name="verify" options={{ headerShown: false, presentation: "card" }} />
+      <Stack.Screen name="wallet" options={{ headerShown: false, presentation: "card" }} />
+      <Stack.Screen name="radio" options={{ headerShown: false, presentation: "modal" }} />
+      <Stack.Screen name="live" options={{ headerShown: false, presentation: "modal" }} />
+      <Stack.Screen name="notifications" options={{ headerShown: false, presentation: "card" }} />
     </Stack>
   );
 }
