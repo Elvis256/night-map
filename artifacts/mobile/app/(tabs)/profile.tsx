@@ -618,6 +618,14 @@ export default function ProfileScreen() {
       {/* Safety */}
       <Text style={[styles.sectionHeader, { color: colors.mutedForeground }]}>SAFETY</Text>
       <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <SettingRow
+          icon="shield-checkmark"
+          iconBg="rgba(31,191,107,0.12)"
+          iconColor="#1FBF6B"
+          label="Safety Hub"
+          value="Panic · Check-In · Contacts"
+          onPress={() => router.push("/safety")}
+        />
         {!showContactInput ? (
           <SettingRow
             icon="person-outline"
@@ -721,6 +729,14 @@ export default function ProfileScreen() {
 
       <Text style={[styles.sectionHeader, { color: colors.mutedForeground }]}>MORE</Text>
       <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <SettingRow
+          icon="gift-outline"
+          iconBg="rgba(255,138,61,0.12)"
+          iconColor="#FF8A3D"
+          label="Refer & Earn"
+          value="200 pts + UGX 5k per invite"
+          onPress={() => router.push("/referral")}
+        />
         <SettingRow
           icon="share-social-outline"
           iconBg="rgba(255,78,98,0.12)"

@@ -267,6 +267,15 @@ export default function MapScreen() {
             <Text style={[styles.liveText, { color: colors.primary }]}>{onlineNow} live</Text>
           </View>
           <TouchableOpacity
+            style={[styles.liveChip, { backgroundColor: "rgba(255,138,61,0.12)", borderWidth: 1, borderColor: "rgba(255,138,61,0.3)" }]}
+            onPress={() => router.push("/deals")}
+          >
+            <Animated.View style={{ transform: [{ scale: dealPulse }] }}>
+              <Ionicons name="flash" size={11} color="#FF8A3D" />
+            </Animated.View>
+            <Text style={[styles.liveText, { color: "#FF8A3D" }]}>Deals</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
             style={[styles.bellBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
             onPress={() => router.push("/notifications")}
           >
