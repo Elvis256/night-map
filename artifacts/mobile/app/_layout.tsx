@@ -46,6 +46,9 @@ function RootLayoutNav() {
       <Stack.Screen name="verify" options={{ headerShown: false, presentation: "card" }} />
       <Stack.Screen name="wallet" options={{ headerShown: false, presentation: "card" }} />
       <Stack.Screen name="payment" options={{ headerShown: false, presentation: "card" }} />
+      <Stack.Screen name="vip" options={{ headerShown: false, presentation: "card" }} />
+      <Stack.Screen name="bookings" options={{ headerShown: false, presentation: "card" }} />
+      <Stack.Screen name="score" options={{ headerShown: false, presentation: "card" }} />
       <Stack.Screen name="radio" options={{ headerShown: false, presentation: "modal" }} />
       <Stack.Screen name="live" options={{ headerShown: false, presentation: "modal" }} />
       <Stack.Screen name="notifications" options={{ headerShown: false, presentation: "card" }} />

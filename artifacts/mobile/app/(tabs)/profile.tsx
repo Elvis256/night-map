@@ -404,7 +404,11 @@ export default function ProfileScreen() {
       )}
 
       {/* Loyalty Points / NightMap Score */}
-      <View style={[styles.loyaltyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+      <TouchableOpacity
+        style={[styles.loyaltyCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+        onPress={() => router.push("/score")}
+        activeOpacity={0.85}
+      >
         <View style={styles.loyaltyRow}>
           <View style={[styles.loyaltyIcon, { backgroundColor: "rgba(255,138,61,0.12)" }]}>
             <Ionicons name="flash" size={16} color={colors.accent} />
@@ -435,10 +439,14 @@ export default function ProfileScreen() {
           ))}
         </View>
         <Text style={[styles.progressHint, { color: colors.mutedForeground }]}>160 pts to Gold · Earn by rating meetups & referring friends</Text>
-      </View>
+      </TouchableOpacity>
 
       {/* VIP card */}
-      <TouchableOpacity style={[styles.vipCard, { backgroundColor: "rgba(122,60,255,0.08)", borderColor: "rgba(122,60,255,0.3)" }]}>
+      <TouchableOpacity
+        style={[styles.vipCard, { backgroundColor: "rgba(122,60,255,0.08)", borderColor: "rgba(122,60,255,0.3)" }]}
+        onPress={() => router.push("/vip")}
+        activeOpacity={0.85}
+      >
         <View style={styles.vipLeft}>
           <Ionicons name="diamond" size={20} color="#7A3CFF" />
           <View>
@@ -519,6 +527,22 @@ export default function ProfileScreen() {
             </>
           )}
         </View>
+      </TouchableOpacity>
+
+      {/* Bookings */}
+      <TouchableOpacity
+        style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}
+        onPress={() => router.push("/bookings")}
+        activeOpacity={0.8}
+      >
+        <SettingRow
+          icon="calendar"
+          iconBg="rgba(61,169,255,0.12)"
+          iconColor="#3DA9FF"
+          label={userProfile.isCompanion ? "Booking Requests" : "My Bookings"}
+          value={userProfile.isCompanion ? "3 requests" : "1 active"}
+          onPress={() => router.push("/bookings")}
+        />
       </TouchableOpacity>
 
       {/* Mode settings */}
