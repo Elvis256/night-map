@@ -3,6 +3,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import React, { useState } from "react";
 import {
+  Linking,
   Alert,
   Platform,
   ScrollView,
@@ -254,14 +255,18 @@ export default function WalletScreen() {
         </View>
 
         {/* Help */}
-        <View style={[styles.helpCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <TouchableOpacity
+          style={[styles.helpCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+          onPress={() => Linking.openURL("mailto:support@nightmap.app?subject=Wallet%20support")}
+          activeOpacity={0.75}
+        >
           <Ionicons name="help-circle-outline" size={20} color={colors.mutedForeground} />
           <View style={{ flex: 1 }}>
             <Text style={[styles.helpTitle, { color: colors.foreground }]}>Need help?</Text>
             <Text style={[styles.helpSub, { color: colors.mutedForeground }]}>Contact support for payment issues</Text>
           </View>
           <Ionicons name="chevron-forward" size={16} color={colors.mutedForeground} />
-        </View>
+        </TouchableOpacity>
       </ScrollView>
     </View>
   );

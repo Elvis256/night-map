@@ -17,6 +17,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
 import { useLocationCity } from "@/hooks/useLocationCity";
@@ -94,7 +95,7 @@ export default function ProfileScreen() {
   const [showSupport, setShowSupport] = useState(false);
   const [showLanguage, setShowLanguage] = useState(false);
 
-  // Privacy toggles (local — would sync to backend in production)
+  // Preferences are stored locally with the rest of the account state.
   const [privShowDistance, setPrivShowDistance] = useState(true);
   const [privShowOnline, setPrivShowOnline] = useState(true);
   const [privAllowSaves, setPrivAllowSaves] = useState(true);
@@ -109,6 +110,67 @@ export default function ProfileScreen() {
 
   const [language, setLanguage] = useState("English");
   const LANGUAGES = ["English", "Swahili", "French", "Luganda"];
+  const [preferencesLoaded, setPreferencesLoaded] = useState(false);
+
+  React.useEffect(() => {
+    AsyncStorage.getItem("profilePreferences")
+      .then((stored) => {
+        if (stored) {
+          const preferences = JSON.parse(stored) as {
+            privShowDistance?: boolean;
+            privShowOnline?: boolean;
+            privAllowSaves?: boolean;
+            privHideFromSearch?: boolean;
+            notifMessages?: boolean;
+            notifBookings?: boolean;
+            notifDeals?: boolean;
+            notifLive?: boolean;
+            notifRadio?: boolean;
+            language?: string;
+          };
+          if (preferences.privShowDistance !== undefined) setPrivShowDistance(preferences.privShowDistance);
+          if (preferences.privShowOnline !== undefined) setPrivShowOnline(preferences.privShowOnline);
+          if (preferences.privAllowSaves !== undefined) setPrivAllowSaves(preferences.privAllowSaves);
+          if (preferences.privHideFromSearch !== undefined) setPrivHideFromSearch(preferences.privHideFromSearch);
+          if (preferences.notifMessages !== undefined) setNotifMessages(preferences.notifMessages);
+          if (preferences.notifBookings !== undefined) setNotifBookings(preferences.notifBookings);
+          if (preferences.notifDeals !== undefined) setNotifDeals(preferences.notifDeals);
+          if (preferences.notifLive !== undefined) setNotifLive(preferences.notifLive);
+          if (preferences.notifRadio !== undefined) setNotifRadio(preferences.notifRadio);
+          if (preferences.language) setLanguage(preferences.language);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setPreferencesLoaded(true));
+  }, []);
+
+  React.useEffect(() => {
+    if (!preferencesLoaded) return;
+    AsyncStorage.setItem("profilePreferences", JSON.stringify({
+      privShowDistance,
+      privShowOnline,
+      privAllowSaves,
+      privHideFromSearch,
+      notifMessages,
+      notifBookings,
+      notifDeals,
+      notifLive,
+      notifRadio,
+      language,
+    })).catch(() => {});
+  }, [
+    preferencesLoaded,
+    privShowDistance,
+    privShowOnline,
+    privAllowSaves,
+    privHideFromSearch,
+    notifMessages,
+    notifBookings,
+    notifDeals,
+    notifLive,
+    notifRadio,
+    language,
+  ]);
 
   const handleSignOut = () => {
     Alert.alert("Sign Out", "Are you sure you want to sign out?", [
@@ -199,6 +261,17 @@ export default function ProfileScreen() {
             maxLength={140}
             multiline
             numberOfLines={3}
+          />
+
+          <Text style={[styles.editLabel, { color: colors.mutedForeground }]}>CITY</Text>
+          <TextInput
+            style={[styles.editInput, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.muted }]}
+            value={editCity}
+            onChangeText={setEditCity}
+            placeholder="e.g. Kampala"
+            placeholderTextColor={colors.mutedForeground}
+            maxLength={30}
+            autoCapitalize="words"
           />
 
           <TouchableOpacity

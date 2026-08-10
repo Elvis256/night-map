@@ -4,6 +4,7 @@ import { router } from "expo-router";
 import React, { useState } from "react";
 import {
   Alert,
+  Linking,
   Platform,
   ScrollView,
   StyleSheet,
@@ -14,6 +15,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
 import { formatUGX, useApp } from "@/context/AppContext";
+import { ChemistryModal } from "@/components/ChemistryModal";
 
 type BookingStatus = "active" | "upcoming" | "completed" | "cancelled";
 
@@ -90,7 +92,17 @@ const STATUS_CONFIG: Record<BookingStatus, { label: string; color: string; bg: s
   cancelled: { label: "Cancelled", color: "#FF4E62",  bg: "rgba(255,78,98,0.10)",   icon: "close-circle-outline" },
 };
 
-function BookingCard({ booking, isCompanion }: { booking: Booking; isCompanion: boolean }) {
+function BookingCard({
+  booking,
+  isCompanion,
+  onChat,
+  onRate,
+}: {
+  booking: Booking;
+  isCompanion: boolean;
+  onChat: () => void;
+  onRate: () => void;
+}) {
   const colors = useColors();
   const s = STATUS_CONFIG[booking.status];
   const totalCost = booking.rate * booking.hours;
@@ -128,7 +140,7 @@ function BookingCard({ booking, isCompanion }: { booking: Booking; isCompanion: 
             {booking.activity} · {booking.city}
           </Text>
         </View>
-        <TouchableOpacity onPress={() => {}} style={[styles.chatBtn, { backgroundColor: colors.muted, borderColor: colors.border }]}>
+        <TouchableOpacity onPress={onChat} style={[styles.chatBtn, { backgroundColor: colors.muted, borderColor: colors.border }]}>
           <Ionicons name="chatbubble-outline" size={15} color={colors.mutedForeground} />
         </TouchableOpacity>
       </View>
@@ -203,7 +215,7 @@ function BookingCard({ booking, isCompanion }: { booking: Booking; isCompanion: 
       {booking.status === "completed" && !booking.rated && (
         <TouchableOpacity
           style={[styles.rateBtn, { backgroundColor: "rgba(122,60,255,0.10)", borderColor: "rgba(122,60,255,0.3)" }]}
-          onPress={() => { Haptics.selectionAsync(); Alert.alert("Rate Meetup", "Rating flow coming soon!"); }}
+          onPress={() => { Haptics.selectionAsync(); onRate(); }}
         >
           <Ionicons name="flask-outline" size={15} color="#7A3CFF" />
           <Text style={[styles.rateBtnText, { color: "#7A3CFF" }]}>Rate Chemistry Score</Text>
@@ -218,8 +230,9 @@ type Tab = "active" | "upcoming" | "history";
 export default function BookingsScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { userProfile } = useApp();
+  const { userProfile, matches } = useApp();
   const [tab, setTab] = useState<Tab>("active");
+  const [ratingTarget, setRatingTarget] = useState<{ name: string; color: string } | null>(null);
 
   const bookings = userProfile.isCompanion ? COMPANION_REQUESTS : SEEKER_BOOKINGS;
   const active   = bookings.filter(b => b.status === "active");
@@ -324,9 +337,29 @@ export default function BookingsScreen() {
             </Text>
           </View>
         ) : (
-          displayed.map(b => <BookingCard key={b.id} booking={b} isCompanion={userProfile.isCompanion} />)
+          displayed.map((b) => {
+            const match = matches.find((m) => m.companion.name === b.companionName);
+            return (
+              <BookingCard
+                key={b.id}
+                booking={b}
+                isCompanion={userProfile.isCompanion}
+                onChat={() => match ? router.push(`/chat/${match.id}`) : router.push("/matches")}
+                onRate={() => setRatingTarget({ name: b.companionName, color: b.companionColor })}
+              />
+            );
+          })
         )}
       </ScrollView>
+
+      {ratingTarget && (
+        <ChemistryModal
+          visible
+          companionName={ratingTarget.name}
+          companionColor={ratingTarget.color}
+          onClose={() => setRatingTarget(null)}
+        />
+      )}
     </View>
   );
 }
