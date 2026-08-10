@@ -144,11 +144,11 @@ function formatTime(date: Date): string {
 export default function MatchesScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { matches } = useApp();
+  const { matches, savedIds } = useApp();
   const [tab, setTab] = useState<Tab>("connections");
   const [ratingMatch, setRatingMatch] = useState<Match | null>(null);
 
-  const favorites = COMPANIONS.filter((c) => c.availabilityStatus !== "offline").slice(0, 5);
+  const favorites = COMPANIONS.filter((c) => savedIds.has(c.id));
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -223,10 +223,10 @@ export default function MatchesScreen() {
             ))}
             <TouchableOpacity
               style={[styles.favAddCard, { backgroundColor: colors.card, borderColor: colors.border }]}
-              onPress={() => {}}
+              onPress={() => router.push("/discover")}
             >
               <Ionicons name="add-circle-outline" size={30} color={colors.mutedForeground} />
-              <Text style={[styles.favAddText, { color: colors.mutedForeground }]}>Browse</Text>
+              <Text style={[styles.favAddText, { color: colors.mutedForeground }]}>Find more</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>

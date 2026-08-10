@@ -1,7 +1,7 @@
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Animated,
   Image,
@@ -385,6 +385,10 @@ export default function DiscoverScreen() {
   });
 
   const [queue, setQueue] = useState<Companion[]>(filtered);
+
+  useEffect(() => {
+    setQueue(filtered);
+  }, [likedIds, passedIds, mood, companions]);
 
   const handleSwipe = (liked: boolean) => {
     if (queue.length === 0) return;

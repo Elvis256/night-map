@@ -381,6 +381,8 @@ interface AppContextType {
   likeCompanion: (id: string) => void;
   passCompanion: (id: string) => void;
   walletCredit: (amount: number) => void;
+  savedIds: Set<string>;
+  toggleSaved: (id: string) => void;
 }
 
 const AppContext = createContext<AppContextType | null>(null);
@@ -409,6 +411,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
   const [likedIds, setLikedIds] = useState<Set<string>>(new Set());
   const [passedIds, setPassedIds] = useState<Set<string>>(new Set());
+  const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
   const [userCity, setUserCity] = useState<string>("");
 
   useEffect(() => {
@@ -417,13 +420,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const loadData = async () => {
     try {
-      const [storedMatches, storedMessages, storedProfile, storedLiked, storedPassed, storedFilters] =
+      const [storedMatches, storedMessages, storedProfile, storedLiked, storedPassed, storedSaved, storedFilters] =
         await Promise.all([
           AsyncStorage.getItem("matches"),
           AsyncStorage.getItem("messages"),
           AsyncStorage.getItem("userProfile"),
           AsyncStorage.getItem("likedIds"),
           AsyncStorage.getItem("passedIds"),
+          AsyncStorage.getItem("savedIds"),
           AsyncStorage.getItem("filters"),
         ]);
 
@@ -442,6 +446,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (storedProfile) setUserProfile(JSON.parse(storedProfile));
       if (storedLiked) setLikedIds(new Set(JSON.parse(storedLiked)));
       if (storedPassed) setPassedIds(new Set(JSON.parse(storedPassed)));
+      if (storedSaved) setSavedIds(new Set(JSON.parse(storedSaved)));
       if (storedFilters) setFilters(JSON.parse(storedFilters));
     } catch (_) {}
   };
@@ -587,6 +592,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
+  const toggleSaved = useCallback((id: string) => {
+    setSavedIds((prev) => {
+      const updated = new Set(prev);
+      if (updated.has(id)) updated.delete(id);
+      else updated.add(id);
+      AsyncStorage.setItem("savedIds", JSON.stringify([...updated]));
+      return updated;
+    });
+  }, []);
+
   const walletCredit = useCallback((amount: number) => {
     setUserProfile((prev) => {
       const updated = prev.isCompanion
@@ -619,6 +634,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         likeCompanion,
         passCompanion,
         walletCredit,
+        savedIds,
+        toggleSaved,
       }}
     >
       {children}

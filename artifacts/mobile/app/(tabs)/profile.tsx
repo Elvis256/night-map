@@ -71,9 +71,14 @@ export default function ProfileScreen() {
   const [showEdit, setShowEdit] = useState(false);
   const [editName, setEditName] = useState(userProfile.name);
   const [editBio, setEditBio] = useState(userProfile.bio ?? "");
+  const [editCity, setEditCity] = useState(userProfile.city);
 
   const saveEdit = () => {
-    updateProfile({ name: editName.trim() || userProfile.name, bio: editBio.trim() });
+    updateProfile({
+      name: editName.trim() || userProfile.name,
+      bio: editBio.trim(),
+      city: editCity.trim() || userProfile.city,
+    });
     setShowEdit(false);
   };
 
@@ -464,9 +469,9 @@ export default function ProfileScreen() {
       <Text style={[styles.sectionHeader, { color: colors.mutedForeground }]}>WHO VIEWED MY PROFILE</Text>
       <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
         {([
-          { name: "Amara", time: "2m ago", color: "#7A3CFF" },
-          { name: "Leila", time: "1h ago", color: "#FF4E62" },
-          { name: "Zara", time: "3h ago", color: "#1FBF6B" },
+          { name: "Amara", time: "2m ago", color: "#7A3CFF", hidden: false },
+          { name: "Leila", time: "1h ago", color: "#FF4E62", hidden: false },
+          { name: "Zara", time: "3h ago", color: "#1FBF6B", hidden: false },
           { name: "Hidden User", time: "5h ago", color: "#6b6b8a", hidden: true },
         ] as const).map((v, i) => (
           <View key={i} style={[styles.settingRow, { borderBottomColor: colors.border }]}>

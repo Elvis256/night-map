@@ -1,4 +1,5 @@
 import * as Haptics from "expo-haptics";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import React, { useState } from "react";
@@ -39,7 +40,7 @@ const INITIAL_NOTIFS: Notif[] = [
     companionColor: "#7A3CFF",
     companionInitial: "A",
     actionLabel: "Connect",
-    actionRoute: "/companion/c1",
+    actionRoute: "/companion/1",
   },
   {
     id: "n2",
@@ -62,7 +63,7 @@ const INITIAL_NOTIFS: Notif[] = [
     companionColor: "#FF8A3D",
     companionInitial: "F",
     actionLabel: "View Deal",
-    actionRoute: "/companion/c5",
+    actionRoute: "/companion/5",
   },
   {
     id: "n4",
@@ -115,7 +116,7 @@ const INITIAL_NOTIFS: Notif[] = [
     companionColor: "#3DA9FF",
     companionInitial: "N",
     actionLabel: "View",
-    actionRoute: "/companion/c4",
+    actionRoute: "/companion/4",
   },
 ];
 
@@ -188,12 +189,27 @@ export default function NotificationsScreen() {
   const insets = useSafeAreaInsets();
   const [notifs, setNotifs] = useState(INITIAL_NOTIFS);
 
+  React.useEffect(() => {
+    AsyncStorage.getItem("notifications")
+      .then((stored) => {
+        if (stored) setNotifs(JSON.parse(stored) as Notif[]);
+      })
+      .catch(() => {});
+  }, []);
+
   const unreadCount = notifs.filter((n) => !n.read).length;
 
-  const markRead = (id: string) => setNotifs((prev) => prev.map((n) => n.id === id ? { ...n, read: true } : n));
+  const persist = (next: Notif[]) => {
+    setNotifs(next);
+    AsyncStorage.setItem("notifications", JSON.stringify(next)).catch(() => {});
+  };
+
+  const markRead = (id: string) => {
+    persist(notifs.map((n) => n.id === id ? { ...n, read: true } : n));
+  };
   const markAllRead = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setNotifs((prev) => prev.map((n) => ({ ...n, read: true })));
+    persist(notifs.map((n) => ({ ...n, read: true })));
   };
 
   const handleAction = (notif: Notif) => {

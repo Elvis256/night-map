@@ -44,7 +44,7 @@ export default function CompanionDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { likedIds, matches } = useApp();
+  const { likedIds, matches, savedIds, toggleSaved } = useApp();
   const [showConnect, setShowConnect] = useState(false);
 
   const companion = COMPANIONS.find((c) => c.id === id);
@@ -57,6 +57,7 @@ export default function CompanionDetailScreen() {
   }
 
   const isLiked = likedIds.has(companion.id);
+  const isSaved = savedIds.has(companion.id);
   const match = matches.find((m) => m.companion.id === companion.id);
   const status = STATUS_LABELS[companion.availabilityStatus];
 
@@ -231,9 +232,12 @@ export default function CompanionDetailScreen() {
       }]}>
         <TouchableOpacity
           style={[styles.secondaryBtn, { borderColor: colors.border, backgroundColor: colors.card }]}
-          onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            toggleSaved(companion.id);
+          }}
         >
-          <Ionicons name="bookmark-outline" size={20} color={colors.foreground} />
+          <Ionicons name={isSaved ? "bookmark" : "bookmark-outline"} size={20} color={isSaved ? colors.primary : colors.foreground} />
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.primaryBtn, {
@@ -358,6 +362,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   escrowText: { fontFamily: "Inter_400Regular", fontSize: 12, flex: 1, lineHeight: 16 },
+  bioText: { fontFamily: "Inter_400Regular", fontSize: 14, lineHeight: 21 },
   menuSubtitle: { fontFamily: "Inter_400Regular", fontSize: 13, marginTop: -4 },
   menuGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   menuItem: {
