@@ -1,4 +1,5 @@
 import * as Haptics from "expo-haptics";
+import * as Clipboard from "expo-clipboard";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import React, { useRef, useState } from "react";
@@ -6,6 +7,7 @@ import {
   Alert,
   Animated,
   Platform,
+  Share,
   ScrollView,
   StyleSheet,
   Text,
@@ -45,6 +47,7 @@ export default function ReferralScreen() {
   const pendingCount = REFERRAL_HISTORY.filter(r => r.status === "pending").length;
 
   const handleCopy = () => {
+    Clipboard.setStringAsync(USER_CODE).catch(() => {});
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setCopied(true);
     Animated.sequence([
@@ -54,13 +57,16 @@ export default function ReferralScreen() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleShare = () => {
+  const handleShare = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    Alert.alert(
-      "Share NightMap",
-      `Use my code ${USER_CODE} when signing up!\n\nYou'll get UGX 5,000 wallet credit on your first booking.\n\nDownload: nightmap.app`,
-      [{ text: "Close" }]
-    );
+    try {
+      await Share.share({
+        title: "Join me on NightMap",
+        message: `Join me on NightMap with code ${USER_CODE}!\n\nYou'll get UGX 5,000 wallet credit on your first booking.\n\nDownload: nightmap.app`,
+      });
+    } catch {
+      Alert.alert("Share NightMap", `Use my code ${USER_CODE} when signing up.`);
+    }
   };
 
   return (

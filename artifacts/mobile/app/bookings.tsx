@@ -4,7 +4,6 @@ import { router } from "expo-router";
 import React, { useState } from "react";
 import {
   Alert,
-  Linking,
   Platform,
   ScrollView,
   StyleSheet,
@@ -96,11 +95,13 @@ function BookingCard({
   booking,
   isCompanion,
   onChat,
+  onShareLocation,
   onRate,
 }: {
   booking: Booking;
   isCompanion: boolean;
   onChat: () => void;
+  onShareLocation: () => void;
   onRate: () => void;
 }) {
   const colors = useColors();
@@ -187,7 +188,7 @@ function BookingCard({
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.actionBtn, { backgroundColor: colors.muted, borderColor: colors.border }]}
-            onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
+            onPress={onShareLocation}
           >
             <Ionicons name="location-outline" size={15} color={colors.mutedForeground} />
             <Text style={[styles.actionBtnText, { color: colors.mutedForeground }]}>Share Location</Text>
@@ -345,6 +346,10 @@ export default function BookingsScreen() {
                 booking={b}
                 isCompanion={userProfile.isCompanion}
                 onChat={() => match ? router.push(`/chat/${match.id}`) : router.push("/matches")}
+                onShareLocation={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  router.push("/safety");
+                }}
                 onRate={() => setRatingTarget({ name: b.companionName, color: b.companionColor })}
               />
             );
