@@ -13,7 +13,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
-import { formatUGX, useApp } from "@/context/AppContext";
+import { AppBooking, formatUGX, useApp } from "@/context/AppContext";
 import { ChemistryModal } from "@/components/ChemistryModal";
 
 type BookingStatus = "active" | "upcoming" | "completed" | "cancelled";
@@ -231,11 +231,30 @@ type Tab = "active" | "upcoming" | "history";
 export default function BookingsScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { userProfile, matches } = useApp();
+  const { userProfile, matches, bookings: createdBookings } = useApp();
   const [tab, setTab] = useState<Tab>("active");
   const [ratingTarget, setRatingTarget] = useState<{ name: string; color: string } | null>(null);
 
-  const bookings = userProfile.isCompanion ? COMPANION_REQUESTS : SEEKER_BOOKINGS;
+  const bookings: Booking[] = userProfile.isCompanion ? COMPANION_REQUESTS : [
+    ...createdBookings.map((booking): Booking => ({
+      id: booking.id,
+      companionName: booking.companionName,
+      companionColor: booking.companionColor,
+      companionInitial: booking.companionInitial,
+      activity: booking.activity,
+      date: booking.date,
+      time: booking.time,
+      hours: booking.hours,
+      rate: booking.rate,
+      status: booking.status,
+      city: booking.city,
+      bookedAt: booking.bookedAt,
+      safetyActive: booking.safetyActive,
+      meetupCode: booking.meetupCode,
+      rated: booking.rated,
+    })),
+    ...SEEKER_BOOKINGS,
+  ];
   const active   = bookings.filter(b => b.status === "active");
   const upcoming = bookings.filter(b => b.status === "upcoming");
   const history  = bookings.filter(b => b.status === "completed" || b.status === "cancelled");

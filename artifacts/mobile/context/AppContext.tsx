@@ -57,6 +57,26 @@ export interface Message {
   time: Date;
 }
 
+export interface AppBooking {
+  id: string;
+  companionId: string;
+  companionName: string;
+  companionColor: string;
+  companionInitial: string;
+  activity: string;
+  date: string;
+  time: string;
+  hours: number;
+  rate: number;
+  status: "active" | "upcoming" | "completed" | "cancelled";
+  city: string;
+  bookedAt: string;
+  safetyActive: boolean;
+  meetupCode: string;
+  rated: boolean;
+  note: string;
+}
+
 export interface UserProfile {
   name: string;
   bio: string;
@@ -371,6 +391,8 @@ interface AppContextType {
   userCity: string;
   setUserCity: (city: string) => void;
   addMatch: (companion: Companion, type: Match["connectionType"]) => void;
+  bookings: AppBooking[];
+  addBooking: (booking: Omit<AppBooking, "id" | "bookedAt" | "meetupCode" | "rated">) => void;
   sendMessage: (matchId: string, text: string) => void;
   toggleAvailability: () => void;
   updateProfile: (updates: Partial<UserProfile>) => void;
@@ -412,6 +434,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [likedIds, setLikedIds] = useState<Set<string>>(new Set());
   const [passedIds, setPassedIds] = useState<Set<string>>(new Set());
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
+  const [bookings, setBookings] = useState<AppBooking[]>([]);
   const [userCity, setUserCity] = useState<string>("");
 
   useEffect(() => {
@@ -420,7 +443,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const loadData = async () => {
     try {
-      const [storedMatches, storedMessages, storedProfile, storedLiked, storedPassed, storedSaved, storedFilters] =
+      const [storedMatches, storedMessages, storedProfile, storedLiked, storedPassed, storedSaved, storedFilters, storedBookings] =
         await Promise.all([
           AsyncStorage.getItem("matches"),
           AsyncStorage.getItem("messages"),
@@ -429,6 +452,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           AsyncStorage.getItem("passedIds"),
           AsyncStorage.getItem("savedIds"),
           AsyncStorage.getItem("filters"),
+          AsyncStorage.getItem("bookings"),
         ]);
 
       if (storedMatches) {
@@ -448,6 +472,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (storedPassed) setPassedIds(new Set(JSON.parse(storedPassed)));
       if (storedSaved) setSavedIds(new Set(JSON.parse(storedSaved)));
       if (storedFilters) setFilters(JSON.parse(storedFilters));
+      if (storedBookings) setBookings(JSON.parse(storedBookings));
     } catch (_) {}
   };
 
@@ -485,6 +510,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       };
       const updated = [newMatch, ...prev];
       saveMatches(updated);
+      return updated;
+    });
+  }, []);
+
+  const addBooking = useCallback((booking: Omit<AppBooking, "id" | "bookedAt" | "meetupCode" | "rated">) => {
+    const created: AppBooking = {
+      ...booking,
+      id: `booking-${Date.now()}`,
+      bookedAt: "Just now",
+      meetupCode: `NM-${Math.floor(1000 + Math.random() * 9000)}`,
+      rated: false,
+    };
+    setBookings((prev) => {
+      const updated = [created, ...prev];
+      AsyncStorage.setItem("bookings", JSON.stringify(updated));
       return updated;
     });
   }, []);
@@ -624,6 +664,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         userCity,
         setUserCity,
         addMatch,
+        bookings,
+        addBooking,
         sendMessage,
         toggleAvailability,
         updateProfile,

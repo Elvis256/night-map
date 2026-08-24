@@ -36,7 +36,7 @@ export function BookingModal({
 }) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { addMatch } = useApp();
+  const { addMatch, addBooking } = useApp();
 
   const [selectedService, setSelectedService] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState(0);
@@ -51,6 +51,21 @@ export function BookingModal({
   const handleSend = () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     addMatch(companion, "standard");
+    addBooking({
+      companionId: companion.id,
+      companionName: companion.name,
+      companionColor: companion.color,
+      companionInitial: companion.name[0],
+      activity: selectedService!,
+      date: DATE_OPTIONS[selectedDate],
+      time: selectedDate === 0 ? "Tonight" : "To be confirmed",
+      hours: DURATION_OPTIONS[selectedDuration].hours,
+      rate: companion.rate,
+      status: selectedDate === 0 ? "active" : "upcoming",
+      city: companion.city,
+      safetyActive: selectedDate === 0,
+      note: note.trim(),
+    });
     setSent(true);
     setTimeout(() => {
       setSent(false);
