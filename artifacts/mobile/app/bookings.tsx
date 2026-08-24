@@ -96,12 +96,14 @@ function BookingCard({
   isCompanion,
   onChat,
   onShareLocation,
+  onCancel,
   onRate,
 }: {
   booking: Booking;
   isCompanion: boolean;
   onChat: () => void;
   onShareLocation: () => void;
+  onCancel: () => void;
   onRate: () => void;
 }) {
   const colors = useColors();
@@ -118,7 +120,7 @@ function BookingCard({
     Alert.alert(
       "Cancel Booking",
       `Cancel your booking with ${booking.companionName}? This may incur a cancellation fee.`,
-      [{ text: "Keep Booking" }, { text: "Cancel", style: "destructive" }]
+      [{ text: "Keep Booking" }, { text: "Cancel", style: "destructive", onPress: onCancel }]
     );
   };
 
@@ -231,7 +233,7 @@ type Tab = "active" | "upcoming" | "history";
 export default function BookingsScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { userProfile, matches, bookings: createdBookings } = useApp();
+  const { userProfile, matches, bookings: createdBookings, updateBookingStatus } = useApp();
   const [tab, setTab] = useState<Tab>("active");
   const [ratingTarget, setRatingTarget] = useState<{ name: string; color: string } | null>(null);
 
@@ -368,6 +370,13 @@ export default function BookingsScreen() {
                 onShareLocation={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                   router.push("/safety");
+                }}
+                onCancel={() => {
+                  if (createdBookings.some((created) => created.id === b.id)) {
+                    updateBookingStatus(b.id, "cancelled");
+                  } else {
+                    Alert.alert("Booking cancellation", "This demo booking is already managed by the sample schedule.");
+                  }
                 }}
                 onRate={() => setRatingTarget({ name: b.companionName, color: b.companionColor })}
               />

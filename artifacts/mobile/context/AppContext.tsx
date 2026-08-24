@@ -393,6 +393,7 @@ interface AppContextType {
   addMatch: (companion: Companion, type: Match["connectionType"]) => void;
   bookings: AppBooking[];
   addBooking: (booking: Omit<AppBooking, "id" | "bookedAt" | "meetupCode" | "rated">) => void;
+  updateBookingStatus: (id: string, status: AppBooking["status"]) => void;
   sendMessage: (matchId: string, text: string) => void;
   toggleAvailability: () => void;
   updateProfile: (updates: Partial<UserProfile>) => void;
@@ -524,6 +525,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     };
     setBookings((prev) => {
       const updated = [created, ...prev];
+      AsyncStorage.setItem("bookings", JSON.stringify(updated));
+      return updated;
+    });
+  }, []);
+
+  const updateBookingStatus = useCallback((id: string, status: AppBooking["status"]) => {
+    setBookings((prev) => {
+      const updated = prev.map((booking) =>
+        booking.id === id
+          ? { ...booking, status, safetyActive: status === "active" }
+          : booking
+      );
       AsyncStorage.setItem("bookings", JSON.stringify(updated));
       return updated;
     });
@@ -666,6 +679,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         addMatch,
         bookings,
         addBooking,
+        updateBookingStatus,
         sendMessage,
         toggleAvailability,
         updateProfile,
