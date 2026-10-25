@@ -1,0 +1,19 @@
+kind = "design-system"
+previewPath = "/nightmap-design-system/"
+title = "NightMap Design System"
+description = "The shared visual system for NightMap, a dark-first social discovery and companion-planning app for people across East Africa."
+version = "1.0.0"
+id = "artifacts/nightmap-design-system"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/nightmap-design-system/" ]
+localPort = 26263
+
+[services.development]
+run = "pnpm --filter @workspace/nightmap-design-system run dev"
+
+[services.env]
+PORT = "26263"
+BASE_PATH = "/nightmap-design-system/"
