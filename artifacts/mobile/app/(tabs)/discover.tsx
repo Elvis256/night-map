@@ -16,10 +16,10 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useColors } from "@/hooks/useColors";
+import { useColors } from "@workspace/nightmap-design-system/hooks/use-colors";
 import { COMPANIONS, Companion, useApp } from "@/context/AppContext";
 import { BookingModal } from "@/components/BookingModal";
-import { TrustBadge } from "@/components/TrustBadge";
+import { TrustBadge } from "@workspace/nightmap-design-system/components/native/TrustBadge";
 
 const COMPANION_PHOTOS = [
   require("@/assets/images/companion1.png"),
@@ -100,7 +100,7 @@ const STORY_COMPANIONS = COMPANIONS.filter((c) => c.availabilityStatus !== "offl
 const SWIPE_THRESHOLD = 100;
 
 function StoryCircle({ companion, onPress, isNew }: { companion: Companion; onPress: () => void; isNew?: boolean }) {
-  const colors = useColors();
+  const colors = useColors("dark");
   return (
     <TouchableOpacity style={styles.storyWrap} onPress={onPress} activeOpacity={0.8}>
       {/* Ring + avatar + overlays — all in one relative container */}
@@ -135,7 +135,7 @@ function StoryCircle({ companion, onPress, isNew }: { companion: Companion; onPr
 }
 
 function StoryViewer({ companion, onClose }: { companion: Companion; onClose: () => void }) {
-  const colors = useColors();
+  const colors = useColors("dark");
   const progressAnim = useRef(new Animated.Value(0)).current;
   React.useEffect(() => {
     Animated.timing(progressAnim, { toValue: 1, duration: 5000, useNativeDriver: false }).start(onClose);
@@ -196,7 +196,7 @@ function CategoryTile({
   active: boolean;
   onPress: () => void;
 }) {
-  const colors = useColors();
+  const colors = useColors("dark");
   const scaleAnim = useRef(new Animated.Value(1)).current;
 
   const handlePress = () => {
@@ -245,7 +245,7 @@ function CategoryTile({
 function SwipeCard({ companion, isTop, onSwipe, onView }: {
   companion: Companion; isTop: boolean; onSwipe: (liked: boolean) => void; onView: () => void;
 }) {
-  const colors = useColors();
+  const colors = useColors("dark");
   const pan = useRef(new Animated.ValueXY()).current;
   const rotateAnim = useRef(new Animated.Value(0)).current;
   const likeOpacity = useRef(new Animated.Value(0)).current;
@@ -371,7 +371,7 @@ function SwipeCard({ companion, isTop, onSwipe, onView }: {
 }
 
 export default function DiscoverScreen() {
-  const colors = useColors();
+  const colors = useColors("dark");
   const insets = useSafeAreaInsets();
   const { companions, likeCompanion, passCompanion, likedIds, passedIds } = useApp();
   const [bookingFor, setBookingFor] = useState<Companion | null>(null);

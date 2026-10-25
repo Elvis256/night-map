@@ -9,7 +9,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { useColors } from "@/hooks/useColors";
+import { useColors } from "@workspace/nightmap-design-system/hooks/use-colors";
 import { Filters, useApp } from "@/context/AppContext";
 
 interface FilterModalProps {
@@ -46,7 +46,7 @@ const RATE_OPTIONS = [
 ];
 
 export function FilterModal({ visible, onClose }: FilterModalProps) {
-  const colors = useColors();
+  const colors = useColors("dark");
   const { filters, updateFilters, resetFilters } = useApp();
 
   const activeCount = [

@@ -1,0 +1,1 @@
+- [Expo dark palette override](expo-dark-palette.md) — use the design-system hook override for dark-only apps; Expo web preview lacks `Appearance.setColorScheme`.

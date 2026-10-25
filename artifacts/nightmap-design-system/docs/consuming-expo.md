@@ -33,6 +33,10 @@ import { useColors } from "@workspace/nightmap-design-system/hooks/use-colors";
 import { useDesignSystemFonts } from "@workspace/nightmap-design-system/hooks/use-fonts";
 ```
 
+`useColors()` follows the device color scheme. Pass `"light"` or `"dark"` when
+the app intentionally locks to one scheme; NightMap is dark-only and uses
+`useColors("dark")` in its screens and app-owned components.
+
 Keep the root layout's existing SplashScreen gating around the shared font
 hook's `fontsLoaded` and `fontError` result.
 

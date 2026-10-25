@@ -11,7 +11,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useColors } from "@/hooks/useColors";
+import { useColors } from "@workspace/nightmap-design-system/hooks/use-colors";
 import { useApp } from "@/context/AppContext";
 
 type Step = "id" | "selfie" | "video" | "review" | "done";
@@ -24,7 +24,7 @@ const STEPS: { key: Step; title: string; desc: string; icon: string }[] = [
 ];
 
 export default function VerifyScreen() {
-  const colors = useColors();
+  const colors = useColors("dark");
   const insets = useSafeAreaInsets();
   const { updateProfile } = useApp();
   const [currentStep, setCurrentStep] = useState<Step>("id");

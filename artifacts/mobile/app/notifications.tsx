@@ -12,7 +12,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useColors } from "@/hooks/useColors";
+import { useColors } from "@workspace/nightmap-design-system/hooks/use-colors";
 
 type NotifType = "available" | "rating" | "deal" | "safety" | "new" | "tip" | "super";
 
@@ -135,7 +135,7 @@ function NotifRow({ notif, onRead, onAction }: {
   onRead: (id: string) => void;
   onAction: (notif: Notif) => void;
 }) {
-  const colors = useColors();
+  const colors = useColors("dark");
   const cfg = TYPE_CONFIG[notif.type];
 
   return (
@@ -185,7 +185,7 @@ function NotifRow({ notif, onRead, onAction }: {
 }
 
 export default function NotificationsScreen() {
-  const colors = useColors();
+  const colors = useColors("dark");
   const insets = useSafeAreaInsets();
   const [notifs, setNotifs] = useState(INITIAL_NOTIFS);
 

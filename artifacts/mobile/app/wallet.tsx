@@ -13,7 +13,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useColors } from "@/hooks/useColors";
+import { useColors } from "@workspace/nightmap-design-system/hooks/use-colors";
 import { formatUGX, useApp } from "@/context/AppContext";
 
 const TOPUP_AMOUNTS = [50000, 100000, 200000, 500000];
@@ -32,7 +32,7 @@ const MOCK_TRANSACTIONS = [
 const PAYOUT_METHODS = ["MTN Mobile Money", "Airtel Money", "Bank Transfer"];
 
 export default function WalletScreen() {
-  const colors = useColors();
+  const colors = useColors("dark");
   const insets = useSafeAreaInsets();
   const { userProfile, walletCredit } = useApp();
   const [selectedTopup, setSelectedTopup] = useState<number | null>(null);

@@ -12,7 +12,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useColors } from "@/hooks/useColors";
+import { useColors } from "@workspace/nightmap-design-system/hooks/use-colors";
 import { COMPANIONS, Companion, formatUGX, useApp } from "@/context/AppContext";
 import { BookingModal } from "@/components/BookingModal";
 
@@ -44,7 +44,7 @@ const DEAL_EXTRAS: Record<string, { label: string; color: string }[]> = {
 };
 
 function DealCard({ companion, rank, onBook }: { companion: Companion; rank: number; onBook: (c: Companion) => void }) {
-  const colors = useColors();
+  const colors = useColors("dark");
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const originalRate = Math.round(companion.rate / (1 - companion.dealDiscount / 100));
   const savings = originalRate - companion.rate;
@@ -153,7 +153,7 @@ function DealCard({ companion, rank, onBook }: { companion: Companion; rank: num
 }
 
 export default function DealsScreen() {
-  const colors   = useColors();
+  const colors   = useColors("dark");
   const insets   = useSafeAreaInsets();
   const { companions } = useApp();
   const [bookingFor, setBookingFor] = useState<Companion | null>(null);

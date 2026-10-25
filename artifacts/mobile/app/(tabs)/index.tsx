@@ -14,10 +14,10 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useColors } from "@/hooks/useColors";
+import { useColors } from "@workspace/nightmap-design-system/hooks/use-colors";
 import { Companion, useApp } from "@/context/AppContext";
 
-import { TrustBadge } from "@/components/TrustBadge";
+import { TrustBadge } from "@workspace/nightmap-design-system/components/native/TrustBadge";
 import { FilterModal } from "@/components/FilterModal";
 
 const CITIES = ["Kampala", "Entebbe", "Mbarara", "Gulu", "Jinja", "Nairobi", "Dar es Salaam", "Dubai"];
@@ -63,7 +63,7 @@ function MapPinView({
   onPress: () => void;
   pulseAnim?: Animated.Value;
 }) {
-  const colors = useColors();
+  const colors = useColors("dark");
   const dotColor = STATUS_COLOR[companion.availabilityStatus];
 
   return (
@@ -163,7 +163,7 @@ const POWER_ZONES = [
 ];
 
 export default function MapScreen() {
-  const colors = useColors();
+  const colors = useColors("dark");
   const insets = useSafeAreaInsets();
   const { filteredCompanions, userProfile, updateProfile, filters, setUserCity } = useApp();
   const [selectedCity, setSelectedCity] = useState("Kampala");

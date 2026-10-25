@@ -15,7 +15,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useColors } from "@/hooks/useColors";
+import { useColors } from "@workspace/nightmap-design-system/hooks/use-colors";
 
 interface TrustedContact {
   id: string;
@@ -48,7 +48,7 @@ function AddContactModal({ visible, onClose, onAdd }: {
   onClose: () => void;
   onAdd: (c: TrustedContact) => void;
 }) {
-  const colors = useColors();
+  const colors = useColors("dark");
   const insets = useSafeAreaInsets();
   const [name, setName]       = useState("");
   const [phone, setPhone]     = useState("");
@@ -104,7 +104,7 @@ function AddContactModal({ visible, onClose, onAdd }: {
 }
 
 export default function SafetyScreen() {
-  const colors = useColors();
+  const colors = useColors("dark");
   const insets = useSafeAreaInsets();
   const [contacts, setContacts]             = useState<TrustedContact[]>(DEFAULT_CONTACTS);
   const [checkInActive, setCheckInActive]   = useState(false);

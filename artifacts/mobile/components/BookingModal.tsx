@@ -14,7 +14,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useColors } from "@/hooks/useColors";
+import { useColors } from "@workspace/nightmap-design-system/hooks/use-colors";
 import { Companion, useApp } from "@/context/AppContext";
 
 const DATE_OPTIONS = ["Tonight", "Tomorrow", "This Weekend", "Next Week"];
@@ -34,7 +34,7 @@ export function BookingModal({
   companion: Companion | null;
   onClose: () => void;
 }) {
-  const colors = useColors();
+  const colors = useColors("dark");
   const insets = useSafeAreaInsets();
   const { addMatch, addBooking } = useApp();
 

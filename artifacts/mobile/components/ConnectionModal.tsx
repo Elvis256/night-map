@@ -10,7 +10,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { useColors } from "@/hooks/useColors";
+import { useColors } from "@workspace/nightmap-design-system/hooks/use-colors";
 import { Companion, Match, formatUGX, useApp } from "@/context/AppContext";
 
 interface ConnectionModalProps {
@@ -57,7 +57,7 @@ const OPTIONS: Option[] = [
 ];
 
 export function ConnectionModal({ companion, visible, onClose, onConnected }: ConnectionModalProps) {
-  const colors = useColors();
+  const colors = useColors("dark");
   const { addMatch } = useApp();
   const [selected, setSelected] = useState<ConnectionType>("standard");
   const [step, setStep] = useState<"pick" | "pay" | "done">("pick");

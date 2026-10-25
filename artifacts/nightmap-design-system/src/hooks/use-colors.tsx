@@ -1,7 +1,9 @@
 import { useColorScheme } from 'react-native';
 import { nativeTheme } from '../lib/native-theme';
 
-export function useColors() {
-  const scheme = useColorScheme();
-  return nativeTheme[scheme === 'light' ? 'light' : 'dark'];
+export function useColors(schemeOverride?: 'light' | 'dark') {
+  const systemScheme = useColorScheme();
+  const scheme =
+    schemeOverride ?? (systemScheme === 'light' ? 'light' : 'dark');
+  return nativeTheme[scheme];
 }

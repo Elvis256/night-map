@@ -12,9 +12,9 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useColors } from "@/hooks/useColors";
+import { useColors } from "@workspace/nightmap-design-system/hooks/use-colors";
 import { COMPANIONS, formatUGX, useApp } from "@/context/AppContext";
-import { TrustBadge } from "@/components/TrustBadge";
+import { TrustBadge } from "@workspace/nightmap-design-system/components/native/TrustBadge";
 import { ConnectionModal } from "@/components/ConnectionModal";
 
 const COMPANION_PHOTOS = [
@@ -42,7 +42,7 @@ const STATUS_LABELS: Record<string, { label: string; color: string }> = {
 
 export default function CompanionDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const colors = useColors();
+  const colors = useColors("dark");
   const insets = useSafeAreaInsets();
   const { likedIds, matches, savedIds, toggleSaved } = useApp();
   const [showConnect, setShowConnect] = useState(false);

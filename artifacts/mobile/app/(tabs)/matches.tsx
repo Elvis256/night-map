@@ -11,7 +11,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useColors } from "@/hooks/useColors";
+import { useColors } from "@workspace/nightmap-design-system/hooks/use-colors";
 import { COMPANIONS, Companion, Match, useApp } from "@/context/AppContext";
 import { ChemistryModal } from "@/components/ChemistryModal";
 
@@ -24,7 +24,7 @@ const STORY_DATA = COMPANIONS.filter((c) => c.availabilityStatus !== "offline").
 }));
 
 function MatchRow({ match, onRate }: { match: Match; onRate: () => void }) {
-  const colors = useColors();
+  const colors = useColors("dark");
   return (
     <TouchableOpacity
       style={[styles.row, { borderBottomColor: colors.border }]}
@@ -76,7 +76,7 @@ function MatchRow({ match, onRate }: { match: Match; onRate: () => void }) {
 }
 
 function FavoriteCard({ companion }: { companion: Companion }) {
-  const colors = useColors();
+  const colors = useColors("dark");
   const isLive = companion.availabilityStatus === "now";
   return (
     <TouchableOpacity
@@ -102,7 +102,7 @@ function FavoriteCard({ companion }: { companion: Companion }) {
 }
 
 function StoryRow({ item }: { item: typeof STORY_DATA[number] }) {
-  const colors = useColors();
+  const colors = useColors("dark");
   const c = item.companion;
   return (
     <TouchableOpacity
@@ -142,7 +142,7 @@ function formatTime(date: Date): string {
 }
 
 export default function MatchesScreen() {
-  const colors = useColors();
+  const colors = useColors("dark");
   const insets = useSafeAreaInsets();
   const { matches, savedIds } = useApp();
   const [tab, setTab] = useState<Tab>("connections");

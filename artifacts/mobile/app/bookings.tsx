@@ -12,7 +12,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useColors } from "@/hooks/useColors";
+import { useColors } from "@workspace/nightmap-design-system/hooks/use-colors";
 import { AppBooking, formatUGX, useApp } from "@/context/AppContext";
 import { ChemistryModal } from "@/components/ChemistryModal";
 
@@ -106,7 +106,7 @@ function BookingCard({
   onCancel: () => void;
   onRate: () => void;
 }) {
-  const colors = useColors();
+  const colors = useColors("dark");
   const s = STATUS_CONFIG[booking.status];
   const totalCost = booking.rate * booking.hours;
   const earnings = Math.round(totalCost * 0.8);
@@ -231,7 +231,7 @@ function BookingCard({
 type Tab = "active" | "upcoming" | "history";
 
 export default function BookingsScreen() {
-  const colors = useColors();
+  const colors = useColors("dark");
   const insets = useSafeAreaInsets();
   const { userProfile, matches, bookings: createdBookings, updateBookingStatus } = useApp();
   const [tab, setTab] = useState<Tab>("active");

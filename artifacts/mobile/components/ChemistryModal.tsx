@@ -11,7 +11,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { useColors } from "@/hooks/useColors";
+import { useColors } from "@workspace/nightmap-design-system/hooks/use-colors";
 
 const DIMENSIONS = [
   { key: "personality", label: "Personality", icon: "happy-outline", color: "#7A3CFF" },
@@ -24,7 +24,7 @@ const DIMENSIONS = [
 type RatingsMap = Record<string, number>;
 
 function StarRow({ dim, rating, onRate }: { dim: typeof DIMENSIONS[number]; rating: number; onRate: (r: number) => void }) {
-  const colors = useColors();
+  const colors = useColors("dark");
   return (
     <View style={styles.dimRow}>
       <View style={[styles.dimIcon, { backgroundColor: `${dim.color}18` }]}>
@@ -53,7 +53,7 @@ function StarRow({ dim, rating, onRate }: { dim: typeof DIMENSIONS[number]; rati
 }
 
 function SuccessView({ points, onDone }: { points: number; onDone: () => void }) {
-  const colors = useColors();
+  const colors = useColors("dark");
   return (
     <View style={styles.successWrap}>
       <View style={[styles.successCircle, { backgroundColor: "rgba(31,191,107,0.12)", borderColor: "rgba(31,191,107,0.4)" }]}>
@@ -85,7 +85,7 @@ interface Props {
 }
 
 export function ChemistryModal({ visible, companionName, companionColor, onClose }: Props) {
-  const colors = useColors();
+  const colors = useColors("dark");
   const [ratings, setRatings] = useState<RatingsMap>({});
   const [review, setReview] = useState("");
   const [submitted, setSubmitted] = useState(false);

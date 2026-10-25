@@ -14,7 +14,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { KeyboardAvoidingView } from "react-native-keyboard-controller";
-import { useColors } from "@/hooks/useColors";
+import { useColors } from "@workspace/nightmap-design-system/hooks/use-colors";
 import { Message, useApp } from "@/context/AppContext";
 
 const WAVEFORM = [8, 14, 22, 18, 28, 12, 20, 26, 16, 10, 24, 18, 14, 22, 8, 20, 26, 12, 18, 16];
@@ -120,7 +120,7 @@ function RecordingOverlay({ onCancel, colors }: { onCancel: () => void; colors: 
 
 export default function ChatScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const colors = useColors();
+  const colors = useColors("dark");
   const insets = useSafeAreaInsets();
   const { matches, messages, sendMessage } = useApp();
   const [input, setInput] = useState("");

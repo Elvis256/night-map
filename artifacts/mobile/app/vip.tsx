@@ -12,7 +12,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useColors } from "@/hooks/useColors";
+import { useColors } from "@workspace/nightmap-design-system/hooks/use-colors";
 import { formatUGX, useApp } from "@/context/AppContext";
 
 const PERKS = [
@@ -33,7 +33,7 @@ const PLANS = [
 ];
 
 export default function VipScreen() {
-  const colors = useColors();
+  const colors = useColors("dark");
   const insets = useSafeAreaInsets();
   const { userProfile, walletCredit } = useApp();
   const [selectedPlan, setSelectedPlan] = useState("quarter");

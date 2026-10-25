@@ -12,7 +12,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useColors } from "@/hooks/useColors";
+import { useColors } from "@workspace/nightmap-design-system/hooks/use-colors";
 import { useApp } from "@/context/AppContext";
 
 const TIERS = [
@@ -49,7 +49,7 @@ const TIER_PERKS: Record<string, string[]> = {
 };
 
 export default function ScoreScreen() {
-  const colors = useColors();
+  const colors = useColors("dark");
   const insets = useSafeAreaInsets();
   const { userProfile } = useApp();
   const score = 340;

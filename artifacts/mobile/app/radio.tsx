@@ -13,7 +13,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useColors } from "@/hooks/useColors";
+import { useColors } from "@workspace/nightmap-design-system/hooks/use-colors";
 import { useApp, COMPANIONS } from "@/context/AppContext";
 
 const CITY_COORDS: Record<string, { lat: number; lng: number }> = {
@@ -213,7 +213,7 @@ function ListenerAvatars({ initials, colors: avatarColors }: { initials: string[
 type Lounge = typeof LOUNGES[number];
 
 function FeaturedLounge({ lounge, onJoin, isNearby }: { lounge: Lounge; onJoin: () => void; isNearby: boolean }) {
-  const colors = useColors();
+  const colors = useColors("dark");
   return (
     <View style={[styles.featured, { backgroundColor: colors.card, borderColor: lounge.color }]}>
       <View style={[styles.featuredGlow, { backgroundColor: `${lounge.color}15` }]} />
@@ -258,7 +258,7 @@ function FeaturedLounge({ lounge, onJoin, isNearby }: { lounge: Lounge; onJoin: 
 }
 
 function LoungeRow({ lounge, onJoin, isNearby }: { lounge: Lounge; onJoin: () => void; isNearby: boolean }) {
-  const colors = useColors();
+  const colors = useColors("dark");
   return (
     <View style={[styles.loungeRow, { backgroundColor: colors.card, borderColor: isNearby ? `${lounge.color}50` : colors.border }]}>
       <View style={[styles.loungeAccent, { backgroundColor: lounge.color }]} />
@@ -305,7 +305,7 @@ function LoungeRow({ lounge, onJoin, isNearby }: { lounge: Lounge; onJoin: () =>
 }
 
 function LiveStreamerCard({ streamer, onWatch }: { streamer: typeof LIVE_STREAMERS[number]; onWatch: () => void }) {
-  const colors = useColors();
+  const colors = useColors("dark");
   const companion = COMPANIONS.find(c => c.id === streamer.companionId);
   if (!companion) return null;
   const pulse = useRef(new Animated.Value(1)).current;
@@ -362,7 +362,7 @@ function LiveStreamerCard({ streamer, onWatch }: { streamer: typeof LIVE_STREAME
 }
 
 export default function RadioScreen() {
-  const colors = useColors();
+  const colors = useColors("dark");
   const insets = useSafeAreaInsets();
   const { userCity, setUserCity } = useApp();
   const [joined, setJoined] = useState<string | null>(null);

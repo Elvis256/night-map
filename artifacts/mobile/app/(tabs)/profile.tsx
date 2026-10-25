@@ -19,7 +19,7 @@ import {
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useColors } from "@/hooks/useColors";
+import { useColors } from "@workspace/nightmap-design-system/hooks/use-colors";
 import { useLocationCity } from "@/hooks/useLocationCity";
 import { formatUGX, useApp } from "@/context/AppContext";
 
@@ -42,7 +42,7 @@ function SettingRow({
   danger?: boolean;
   right?: React.ReactNode;
 }) {
-  const colors = useColors();
+  const colors = useColors("dark");
   return (
     <TouchableOpacity
       style={[styles.settingRow, { borderBottomColor: colors.border }]}
@@ -63,7 +63,7 @@ function SettingRow({
 }
 
 export default function ProfileScreen() {
-  const colors = useColors();
+  const colors = useColors("dark");
   const insets = useSafeAreaInsets();
   const { userProfile, toggleAvailability, updateProfile, matches, walletCredit } = useApp();
   const [panicActive, setPanicActive] = useState(false);

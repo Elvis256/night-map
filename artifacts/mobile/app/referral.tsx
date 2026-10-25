@@ -15,7 +15,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useColors } from "@/hooks/useColors";
+import { useColors } from "@workspace/nightmap-design-system/hooks/use-colors";
 import { useApp } from "@/context/AppContext";
 
 const USER_CODE = "NIGHT-K4NJ";
@@ -35,7 +35,7 @@ const HOW_IT_WORKS = [
 ];
 
 export default function ReferralScreen() {
-  const colors  = useColors();
+  const colors  = useColors("dark");
   const insets  = useSafeAreaInsets();
   const { userProfile } = useApp();
   const [copied, setCopied] = useState(false);

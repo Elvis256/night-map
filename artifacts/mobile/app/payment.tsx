@@ -14,7 +14,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useColors } from "@/hooks/useColors";
+import { useColors } from "@workspace/nightmap-design-system/hooks/use-colors";
 import { formatUGX, useApp } from "@/context/AppContext";
 
 const AMOUNTS = [50_000, 100_000, 200_000, 500_000];
@@ -32,7 +32,7 @@ type ScreenState = "select" | "details" | "processing" | "success";
 
 export default function PaymentScreen() {
   const insets = useSafeAreaInsets();
-  const colors = useColors();
+  const colors = useColors("dark");
   const { walletCredit, userProfile } = useApp();
 
   const [amount, setAmount] = useState<number | null>(null);

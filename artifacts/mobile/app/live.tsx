@@ -14,7 +14,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useColors } from "@/hooks/useColors";
+import { useColors } from "@workspace/nightmap-design-system/hooks/use-colors";
 import { COMPANIONS, useApp } from "@/context/AppContext";
 
 const LIVE_DATA: Record<string, { title: string; viewers: number; ppvPrice: number; isPremium: boolean }> = {
@@ -64,7 +64,7 @@ function FloatingHeart({ color, startX }: { color: string; startX: number }) {
 }
 
 function BroadcastSetup({ companion, onGoLive }: { companion: NonNullable<ReturnType<typeof COMPANIONS.find>>; onGoLive: (title: string, ppv: number) => void }) {
-  const colors = useColors();
+  const colors = useColors("dark");
   const insets = useSafeAreaInsets();
   const [title, setTitle] = useState("");
   const [desc, setDesc] = useState("");
@@ -179,7 +179,7 @@ function LiveView({ companion, title, ppvPrice, isBroadcaster }: {
   ppvPrice: number;
   isBroadcaster: boolean;
 }) {
-  const colors = useColors();
+  const colors = useColors("dark");
   const insets = useSafeAreaInsets();
   const { walletCredit } = useApp();
   const [viewers, setViewers] = useState(isBroadcaster ? 1 : (LIVE_DATA[companion.id]?.viewers ?? 50));
