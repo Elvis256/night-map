@@ -56,7 +56,9 @@
     "@expo/vector-icons": "^15.0.3",
     "@workspace/nightmap-design-system": "workspace:*",
     "expo-clipboard": "~8.0.8",
+    "expo-device": "~8.0.10",
     "expo-font": "~14.0.10",
+    "expo-notifications": "~0.32.17",
     "react-native": "0.81.5"
   }
 }

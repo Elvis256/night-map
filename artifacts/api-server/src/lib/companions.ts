@@ -14,6 +14,7 @@ import {
   type Photo,
   type User,
 } from "@workspace/db";
+import { hasHighEndAccess, isHighEndProfile } from "./billing";
 import { cityCoords, haversineKm } from "./geo";
 import { hasActiveDeal, isFeatured, isOnline, photoIndexFor } from "./serializers";
 import { publicUrl } from "./storage";
@@ -30,6 +31,7 @@ export interface ViewerContext {
   saved: Set<string>;
   connections: Map<string, string>;
   origin: { lat: number; lng: number } | null;
+  highEndAccess: boolean;
 }
 
 export interface Aggregates {
@@ -46,7 +48,7 @@ export async function loadViewerContext(
   viewer: User,
   origin?: { lat: number; lng: number } | null,
 ): Promise<ViewerContext> {
-  const [swipes, saved, connections] = await Promise.all([
+  const [swipes, saved, connections, highEndAccess] = await Promise.all([
     db.select().from(swipesTable).where(eq(swipesTable.userId, viewer.id)),
     db.select().from(savedCompanionsTable).where(eq(savedCompanionsTable.userId, viewer.id)),
     db
@@ -55,6 +57,7 @@ export async function loadViewerContext(
       .where(
         sql`${connectionsTable.seekerId} = ${viewer.id} or ${connectionsTable.companionId} = ${viewer.id}`,
       ),
+    hasHighEndAccess(viewer),
   ]);
   const resolvedOrigin =
     origin ??
@@ -68,6 +71,7 @@ export async function loadViewerContext(
       connections.map((c) => [c.seekerId === viewer.id ? c.companionId : c.seekerId, c.id]),
     ),
     origin: resolvedOrigin,
+    highEndAccess,
   };
 }
 
@@ -137,13 +141,15 @@ export function buildCard(row: CompanionRow, ctx: ViewerContext, agg: Aggregates
       : null;
   const photo = agg.photos.get(user.id);
   const dealActive = hasActiveDeal(profile);
+  const highEnd = isHighEndProfile(profile);
+  const locked = highEnd && !ctx.highEndAccess && user.id !== ctx.viewerId;
   return {
     id: user.id,
     name: user.name,
     age: user.age,
     gender: user.gender,
     city: user.city,
-    bio: user.bio,
+    bio: locked && user.bio.length > 80 ? `${user.bio.slice(0, 80).trimEnd()}…` : user.bio,
     avatarColor: user.avatarColor,
     photoUrl: photo ? publicUrl(photo.path) : null,
     photoIndex: photoIndexFor(user),
@@ -170,6 +176,8 @@ export function buildCard(row: CompanionRow, ctx: ViewerContext, agg: Aggregates
     reviewCount: rating?.count ?? 0,
     isLiked: ctx.liked.has(user.id),
     isSaved: ctx.saved.has(user.id),
+    isHighEnd: highEnd,
+    locked,
     connectionId: ctx.connections.get(user.id) ?? null,
   };
 }

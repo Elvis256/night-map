@@ -6,6 +6,8 @@ import {
   DeleteTrustedContactParams,
   HeartbeatBody,
   PostStoryBody,
+  RegisterPushTokenBody,
+  UnregisterPushTokenBody,
   UpdateCompanionProfileBody,
   UpdateMeBody,
   UploadPhotoBody,
@@ -17,6 +19,7 @@ import {
   photosTable,
   pointsLedgerTable,
   profileViewsTable,
+  pushTokensTable,
   referralsTable,
   savedCompanionsTable,
   storiesTable,
@@ -207,6 +210,23 @@ router.delete("/me/photos/:photoId", async (req, res) => {
     const next = await db.select().from(photosTable).where(eq(photosTable.userId, me.id)).orderBy(photosTable.sortOrder).limit(1);
     if (next[0]) await db.update(photosTable).set({ isPrimary: true }).where(eq(photosTable.id, next[0].id));
   }
+  res.status(204).end();
+});
+
+router.post("/me/push-token", async (req, res) => {
+  const me = currentUser(req);
+  const body = RegisterPushTokenBody.parse(req.body);
+  await db
+    .insert(pushTokensTable)
+    .values({ userId: me.id, token: body.token, platform: body.platform ?? "unknown" })
+    .onConflictDoUpdate({ target: pushTokensTable.token, set: { userId: me.id, platform: body.platform ?? "unknown", lastSeenAt: new Date() } });
+  res.status(204).end();
+});
+
+router.delete("/me/push-token", async (req, res) => {
+  const me = currentUser(req);
+  const body = UnregisterPushTokenBody.parse(req.body);
+  await db.delete(pushTokensTable).where(and(eq(pushTokensTable.token, body.token), eq(pushTokensTable.userId, me.id)));
   res.status(204).end();
 });
 

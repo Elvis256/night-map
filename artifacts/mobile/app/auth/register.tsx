@@ -152,7 +152,7 @@ export default function RegisterScreen() {
       });
       await AsyncStorage.setItem("lastPhone", fullPhone);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      router.replace("/(tabs)");
+      router.replace(role === "companion" ? "/companion-setup" : "/(tabs)");
     } catch (err) {
       const msg = errorMessage(err, "Could not create your account. Try again.");
       setError(msg);

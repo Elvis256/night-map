@@ -24,6 +24,7 @@ tags:
   - name: lounges
   - name: city
   - name: verification
+  - name: billing
   - name: admin
 
 paths:
@@ -1130,6 +1131,112 @@ paths:
               schema:
                 $ref: "#/components/schemas/AdminVerification"
 
+  # ───────────────────────── push ─────────────────────────
+  /me/push-token:
+    post:
+      operationId: registerPushToken
+      tags: [me]
+      summary: Register this device for push notifications
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PushTokenRequest"
+      responses:
+        "204":
+          description: Registered
+    delete:
+      operationId: unregisterPushToken
+      tags: [me]
+      summary: Stop push notifications for this device
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PushTokenRequest"
+      responses:
+        "204":
+          description: Removed
+
+  # ───────────────────────── packages / entitlements ─────────────────────────
+  /packages:
+    get:
+      operationId: listPackages
+      tags: [billing]
+      summary: Packages available for the current role
+      responses:
+        "200":
+          description: Packages
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Package"
+  /me/entitlements:
+    get:
+      operationId: getEntitlements
+      tags: [billing]
+      summary: What the current user can access
+      responses:
+        "200":
+          description: Entitlements
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Entitlements"
+  /subscriptions:
+    post:
+      operationId: requestSubscription
+      tags: [billing]
+      summary: Register interest in a package (checkout is not connected)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubscriptionRequest"
+      responses:
+        "201":
+          description: Request recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Subscription"
+  /admin/subscriptions:
+    get:
+      operationId: adminListSubscriptions
+      tags: [admin]
+      summary: Subscription requests and active grants (admin)
+      responses:
+        "200":
+          description: Subscriptions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AdminSubscription"
+    post:
+      operationId: adminGrantSubscription
+      tags: [admin]
+      summary: Activate a package for a user (admin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GrantSubscriptionRequest"
+      responses:
+        "201":
+          description: Activated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminSubscription"
+
 components:
   parameters:
     CompanionId:
@@ -1587,6 +1694,8 @@ components:
         - reviewCount
         - isLiked
         - isSaved
+        - isHighEnd
+        - locked
       properties:
         id:
           type: string
@@ -1661,6 +1770,10 @@ components:
         isLiked:
           type: boolean
         isSaved:
+          type: boolean
+        isHighEnd:
+          type: boolean
+        locked:
           type: boolean
         connectionId:
           type: string
@@ -2525,6 +2638,131 @@ components:
         decision:
           type: string
           enum: [approve, reject]
+        note:
+          type: string
+          maxLength: 300
+
+    PushTokenRequest:
+      type: object
+      required: [token]
+      properties:
+        token:
+          type: string
+          minLength: 10
+          maxLength: 200
+        platform:
+          type: string
+          enum: [ios, android, web, unknown]
+
+    Package:
+      type: object
+      required: [id, title, price, period, description, features, audience, highlighted]
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        price:
+          type: integer
+        period:
+          type: string
+        description:
+          type: string
+        features:
+          type: array
+          items:
+            type: string
+        audience:
+          $ref: "#/components/schemas/Role"
+        highlighted:
+          type: boolean
+    Subscription:
+      type: object
+      required: [id, packageId, status, amount, createdAt]
+      properties:
+        id:
+          type: string
+        packageId:
+          type: string
+        status:
+          type: string
+          enum: [requested, active, expired, cancelled]
+        amount:
+          type: integer
+        startsAt:
+          type: string
+          format: date-time
+          nullable: true
+        endsAt:
+          type: string
+          format: date-time
+          nullable: true
+        note:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+    Entitlements:
+      type: object
+      required: [activePackageId, highEndAccess, unlimitedSuperRequests, featured, superRequestsLeftToday, checkoutEnabled]
+      properties:
+        activePackageId:
+          type: string
+        activeUntil:
+          type: string
+          format: date-time
+          nullable: true
+        highEndAccess:
+          type: boolean
+        unlimitedSuperRequests:
+          type: boolean
+        featured:
+          type: boolean
+        superRequestsLeftToday:
+          type: integer
+        checkoutEnabled:
+          type: boolean
+        pendingRequest:
+          allOf:
+            - $ref: "#/components/schemas/Subscription"
+          nullable: true
+    SubscriptionRequest:
+      type: object
+      required: [packageId]
+      properties:
+        packageId:
+          type: string
+          maxLength: 40
+        note:
+          type: string
+          maxLength: 300
+    AdminSubscription:
+      allOf:
+        - $ref: "#/components/schemas/Subscription"
+        - type: object
+          required: [userId, userName, userPhone, userRole]
+          properties:
+            userId:
+              type: string
+            userName:
+              type: string
+            userPhone:
+              type: string
+            userRole:
+              $ref: "#/components/schemas/Role"
+    GrantSubscriptionRequest:
+      type: object
+      required: [userId, packageId]
+      properties:
+        userId:
+          type: string
+        packageId:
+          type: string
+          maxLength: 40
+        days:
+          type: integer
+          minimum: 1
+          maximum: 366
         note:
           type: string
           maxLength: 300

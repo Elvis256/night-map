@@ -41,5 +41,7 @@ export interface CompanionCard {
   reviewCount: number;
   isLiked: boolean;
   isSaved: boolean;
+  isHighEnd: boolean;
+  locked: boolean;
   connectionId?: string | null;
 }

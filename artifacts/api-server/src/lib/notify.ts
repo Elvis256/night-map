@@ -6,6 +6,7 @@ import {
   usersTable,
   type NotificationPrefs,
 } from "@workspace/db";
+import { sendPush } from "./push";
 
 export type NotificationChannel = keyof NotificationPrefs | "system";
 
@@ -40,6 +41,11 @@ export async function notify(input: NotifyInput): Promise<void> {
     actionRoute: input.actionRoute ?? null,
     actionLabel: input.actionLabel ?? null,
     actorId: input.actorId ?? null,
+  });
+  void sendPush(input.userId, {
+    title: input.title,
+    body: input.body,
+    data: { type: input.type, route: input.actionRoute ?? null },
   });
 }
 

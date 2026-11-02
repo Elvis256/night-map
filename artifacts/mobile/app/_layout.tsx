@@ -13,6 +13,8 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AppProvider, useApp } from "@/context/AppContext";
 import { ONBOARDED_KEY, configureApi, isUnauthorized } from "@/lib/api";
+import * as Notifications from "expo-notifications";
+import { routeFromNotification } from "@/lib/push";
 
 configureApi();
 SplashScreen.preventAutoHideAsync();
@@ -30,6 +32,15 @@ function RootLayoutNav() {
   const { authStatus } = useApp();
   const segments = useSegments();
   const inAuth = segments[0] === "auth" || segments[0] === "onboarding";
+  const inSetup = segments[0] === "companion-setup";
+
+  useEffect(() => {
+    const sub = Notifications.addNotificationResponseReceivedListener((response) => {
+      const route = routeFromNotification(response);
+      if (route) router.push(route as never);
+    });
+    return () => sub.remove();
+  }, []);
 
   useEffect(() => {
     if (authStatus === "loading") return;
@@ -37,7 +48,7 @@ function RootLayoutNav() {
       AsyncStorage.getItem(ONBOARDED_KEY).then((onboarded) => {
         router.replace(onboarded ? "/auth/login" : "/auth/register");
       });
-    } else if (authStatus === "signedIn" && inAuth) {
+    } else if (authStatus === "signedIn" && inAuth && !inSetup) {
       router.replace("/(tabs)");
     }
   }, [authStatus, inAuth]);
@@ -46,6 +57,7 @@ function RootLayoutNav() {
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="onboarding" options={{ headerShown: false }} />
+      <Stack.Screen name="companion-setup" options={{ headerShown: false, presentation: "card" }} />
       <Stack.Screen name="auth/login" options={{ headerShown: false }} />
       <Stack.Screen name="auth/register" options={{ headerShown: false }} />
       <Stack.Screen name="companion/[id]" options={{ headerShown: false, presentation: "card" }} />

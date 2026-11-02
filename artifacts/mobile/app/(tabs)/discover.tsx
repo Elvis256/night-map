@@ -4,6 +4,7 @@ import { router } from "expo-router";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Animated,
   Image,
   Modal,
@@ -305,6 +306,12 @@ function SwipeCard({ companion, isTop, onSwipe, onView }: {
         <View style={styles.photoOverlay} />
         {/* Status badges */}
         <View style={styles.cardTopBadges}>
+          {companion.isHighEnd && (
+            <View style={[styles.cardBadge, { backgroundColor: companion.locked ? "#7A3CFF" : "#3DA9FF" }]}>
+              <Ionicons name={companion.locked ? "lock-closed" : "diamond"} size={9} color="#fff" />
+              <Text style={styles.cardBadgeText}>HIGH-END</Text>
+            </View>
+          )}
           {companion.isNewInTown && (
             <View style={[styles.cardBadge, { backgroundColor: "#1FBF6B" }]}>
               <Text style={styles.cardBadgeText}>NEW</Text>
@@ -529,7 +536,19 @@ export default function DiscoverScreen() {
           <View style={styles.actionWrap}>
             <TouchableOpacity
               style={[styles.actionBtn, styles.likeBtn, { backgroundColor: "rgba(255,78,98,0.15)", borderColor: colors.primary }]}
-              onPress={() => { if (queue[0]) setBookingFor(queue[0]); }}
+              onPress={() => {
+                const top = queue[0];
+                if (!top) return;
+                if (top.locked) {
+                  Alert.alert(
+                    "High-End collection",
+                    `${top.name} is only available to clients with High-End Access.`,
+                    [{ text: "Not now", style: "cancel" }, { text: "See packages", onPress: () => router.push("/vip") }],
+                  );
+                  return;
+                }
+                setBookingFor(top);
+              }}
             >
               <Ionicons name="heart" size={26} color={colors.primary} />
             </TouchableOpacity>

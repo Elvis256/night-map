@@ -10,7 +10,7 @@ East Africa's social companionship platform: seekers discover verified companion
 - `pnpm run seed` — seed demo companions, seekers, lounges, bookings and reviews (idempotent). All seeded accounts use PIN `1234`; companions are `+256700000001`…`010`, seekers `+256700000101`…`104`, admin `+256700000999`.
 - `pnpm run codegen` — regenerate react-query hooks (`lib/api-client-react`) and zod validators (`lib/api-zod`) from `lib/api-spec/openapi.yaml`; also rewrites `lib/api-zod/src/index.ts`
 - `pnpm run typecheck` — full typecheck (libs first via `tsc --build`, then artifacts)
-- Required env: `DATABASE_URL` (Postgres), `PORT`. Optional: `UPLOADS_DIR` (defaults to `artifacts/api-server/uploads`), `EXPO_PUBLIC_API_URL` on the mobile side to point at a specific API host.
+- Required env: `DATABASE_URL` (Postgres), `PORT`. Optional: `UPLOADS_DIR` (defaults to `artifacts/api-server/uploads`), `HIGH_END_RATE_UGX`, `EXPO_ACCESS_TOKEN`; on the mobile side `EXPO_PUBLIC_API_URL` to point at a specific API host.
 
 ## Stack
 
@@ -39,12 +39,16 @@ East Africa's social companionship platform: seekers discover verified companion
 - Realtime is polling (chat 3s, inbox 8s, unread 10s). Streams and lounges are real at the data level (presence, comments, hearts, hosting); audio/video transport is not connected.
 - Safety: panic/check-in create `safety_events`, queue SMS rows in `sms_outbox` for trusted contacts (no SMS gateway wired yet) and notify admins in-app.
 - Verification uploads are stored privately under `uploads/private`; admins (`users.is_admin`) review via `/api/admin/verifications`.
+- Entitlements without checkout: `lib/billing.ts` defines the packages; a companion with a rate ≥ `HIGH_END_RATE_UGX` (default 150,000) is in the High-End collection and appears `locked` to seekers without High-End Access (connect/book return 403 `high_end_locked`). Free seekers get 3 super requests per day (`super_limit`), VIP unlimited. Users can register interest (`POST /subscriptions` → status `requested`); admins activate with `POST /admin/subscriptions` (Featured also sets `featured_until`). `checkoutEnabled` stays false.
+- Push notifications: devices register Expo push tokens (`POST /me/push-token`); every `notify()` call also sends an Expo push (needs an EAS `projectId` in app config on the client; set `EXPO_ACCESS_TOKEN` on the server for enhanced security). Dead tokens are pruned on `DeviceNotRegistered`.
+- Companion onboarding: new companions land in `app/companion-setup.tsx` (photo, bio, menu/vibes, rate, availability); the profile tab nudges until a photo and menu exist.
 
 ## Product
 
 - Map + Discover (swipe, categories, stories), companion profiles with reviews, connection requests (standard/super), chat with voice-note placeholders and system lines for booking events
 - Bookings for both sides, chemistry-score reviews, loyalty points and tiers, referrals (+200 pts), notifications
-- Companion listing management, photo upload, stories, tonight's deals, go live
+- Companion onboarding wizard, listing management, photo upload, stories, tonight's deals, go live
+- Packages with entitlements (High-End collection gating, super-request limits) and admin grants; push notifications
 - Safety hub (trusted contacts, panic, check-in, incident reports), who-viewed-me, weather (Open-Meteo) and community outage reports on the map
 - Radio lounges and live streams (presence/chat), wallet (informational), packages preview
 
@@ -59,6 +63,7 @@ East Africa's social companionship platform: seekers discover verified companion
 - Generated hooks require an explicit `queryKey` in `query` options (`useGetScore({ query: { queryKey: getGetScoreQueryKey() } })`).
 - `pnpm run typecheck:libs` (`tsc --build`) must run before the mobile typecheck sees new lib exports (declarations are emitted to `lib/*/dist`).
 - Under `CI=true` pnpm needs `--no-frozen-lockfile` to add dependencies.
+- Expo typed routes (`.expo/types/router.d.ts`) only regenerate when the dev server starts; after adding a route run `expo start` once (or the typecheck will reject the new path).
 - The mockup-sandbox artifact has a pre-existing `@types/react` duplicate-type error unrelated to the app.
 
 ## Pointers

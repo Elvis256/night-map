@@ -317,6 +317,8 @@ export interface CompanionCard {
   reviewCount: number;
   isLiked: boolean;
   isSaved: boolean;
+  isHighEnd: boolean;
+  locked: boolean;
   connectionId?: string | null;
 }
 
@@ -886,6 +888,95 @@ export const ReviewVerificationRequestDecision = {
 
 export interface ReviewVerificationRequest {
   decision: ReviewVerificationRequestDecision;
+  /** @maxLength 300 */
+  note?: string;
+}
+
+export type PushTokenRequestPlatform = typeof PushTokenRequestPlatform[keyof typeof PushTokenRequestPlatform];
+
+
+export const PushTokenRequestPlatform = {
+  ios: 'ios',
+  android: 'android',
+  web: 'web',
+  unknown: 'unknown',
+} as const;
+
+export interface PushTokenRequest {
+  /**
+     * @minLength 10
+     * @maxLength 200
+     */
+  token: string;
+  platform?: PushTokenRequestPlatform;
+}
+
+export interface Package {
+  id: string;
+  title: string;
+  price: number;
+  period: string;
+  description: string;
+  features: string[];
+  audience: Role;
+  highlighted: boolean;
+}
+
+export type SubscriptionStatus = typeof SubscriptionStatus[keyof typeof SubscriptionStatus];
+
+
+export const SubscriptionStatus = {
+  requested: 'requested',
+  active: 'active',
+  expired: 'expired',
+  cancelled: 'cancelled',
+} as const;
+
+export interface Subscription {
+  id: string;
+  packageId: string;
+  status: SubscriptionStatus;
+  amount: number;
+  startsAt?: string | null;
+  endsAt?: string | null;
+  note?: string;
+  createdAt: string;
+}
+
+export interface Entitlements {
+  activePackageId: string;
+  activeUntil?: string | null;
+  highEndAccess: boolean;
+  unlimitedSuperRequests: boolean;
+  featured: boolean;
+  superRequestsLeftToday: number;
+  checkoutEnabled: boolean;
+  pendingRequest?: Subscription | null;
+}
+
+export interface SubscriptionRequest {
+  /** @maxLength 40 */
+  packageId: string;
+  /** @maxLength 300 */
+  note?: string;
+}
+
+export type AdminSubscription = Subscription & {
+  userId: string;
+  userName: string;
+  userPhone: string;
+  userRole: Role;
+};
+
+export interface GrantSubscriptionRequest {
+  userId: string;
+  /** @maxLength 40 */
+  packageId: string;
+  /**
+     * @minimum 1
+     * @maximum 366
+     */
+  days?: number;
   /** @maxLength 300 */
   note?: string;
 }

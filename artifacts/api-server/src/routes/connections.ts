@@ -22,7 +22,8 @@ import {
   type Connection,
 } from "@workspace/db";
 import { currentUser, requireAuth, type AuthedUser } from "../lib/auth";
-import { badRequest, forbidden, notFound } from "../lib/errors";
+import { badRequest, forbidden, HttpError, notFound } from "../lib/errors";
+import { entitlementsFor, hasHighEndAccess, isHighEndProfile } from "../lib/billing";
 import { notify } from "../lib/notify";
 import { toConnection, toMessage, toParty } from "../lib/serializers";
 
@@ -115,12 +116,22 @@ router.post("/connections", async (req, res) => {
   const body = CreateConnectionBody.parse(req.body);
   if (body.companionId === me.id) throw badRequest("You cannot connect with yourself");
   const target = await db
-    .select({ id: usersTable.id, role: usersTable.role, name: usersTable.name })
+    .select({ id: usersTable.id, role: usersTable.role, name: usersTable.name, profile: companionProfilesTable })
     .from(usersTable)
+    .leftJoin(companionProfilesTable, eq(companionProfilesTable.userId, usersTable.id))
     .where(eq(usersTable.id, body.companionId))
     .limit(1);
   if (!target[0]) throw notFound("Companion");
   if (target[0].role !== "companion") throw badRequest("You can only connect with companions");
+  if (target[0].profile && isHighEndProfile(target[0].profile) && !(await hasHighEndAccess(me))) {
+    throw new HttpError(403, `${target[0].name} is in the High-End collection. Upgrade to High-End Access to connect.`, "high_end_locked");
+  }
+  if (body.type === "super") {
+    const ent = await entitlementsFor(me);
+    if (!ent.unlimitedSuperRequests && ent.superRequestsLeftToday <= 0) {
+      throw new HttpError(403, "You've used your free super requests for today. NightMap VIP removes the limit.", "super_limit");
+    }
+  }
   const { connection, created } = await ensureConnection(me.id, body.companionId, body.type ?? "standard");
   let current = connection;
   if (created) {

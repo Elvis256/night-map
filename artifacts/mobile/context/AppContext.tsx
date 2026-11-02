@@ -53,6 +53,7 @@ import {
 } from "@workspace/api-client-react";
 import { AUTH_TOKEN_KEY, ONBOARDED_KEY, assetUrl, isUnauthorized } from "@/lib/api";
 import { nearestCity } from "@/hooks/useLocationCity";
+import { registerForPush, unregisterPush } from "@/lib/push";
 
 export type AvailabilityStatus = "now" | "tonight" | "offline";
 export type CompanionGender = "female" | "male" | "other";
@@ -90,6 +91,8 @@ export interface Companion {
   gender: CompanionGender;
   isLiked: boolean;
   isSaved: boolean;
+  isHighEnd: boolean;
+  locked: boolean;
   connectionId: string | null;
 }
 
@@ -298,6 +301,8 @@ export function toCompanion(c: CompanionCard): Companion {
     gender: c.gender,
     isLiked: c.isLiked,
     isSaved: c.isSaved,
+    isHighEnd: c.isHighEnd,
+    locked: c.locked,
     connectionId: c.connectionId ?? null,
   };
 }
@@ -335,6 +340,8 @@ export function partyToCompanion(p: PartySummary): Companion {
     gender: "other",
     isLiked: false,
     isSaved: false,
+    isHighEnd: false,
+    locked: false,
     connectionId: null,
   };
 }
@@ -582,6 +589,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     })();
   }, [signedIn]);
 
+  // Register this device for push notifications once per session.
+  const pushRegistered = useRef(false);
+  useEffect(() => {
+    if (!signedIn || pushRegistered.current) return;
+    pushRegistered.current = true;
+    registerForPush().catch(() => {});
+  }, [signedIn]);
+
   // Presence heartbeat every 2 minutes while signed in.
   useEffect(() => {
     if (!signedIn) return;
@@ -671,6 +686,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       await AsyncStorage.setItem(ONBOARDED_KEY, "true");
       queryClient.setQueryData(getGetMeQueryKey(), user);
       locationRequested.current = false;
+      pushRegistered.current = false;
       setToken(nextToken);
     },
     [queryClient],
@@ -703,6 +719,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   );
 
   const signOut = useCallback(async () => {
+    await unregisterPush();
+    pushRegistered.current = false;
     try {
       await apiLogout();
     } catch {
@@ -712,6 +730,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [clearSession]);
 
   const deleteAccount = useCallback(async () => {
+    await unregisterPush();
+    pushRegistered.current = false;
     await deleteMe();
     await AsyncStorage.multiRemove([AUTH_TOKEN_KEY, ONBOARDED_KEY, "filters", "profilePreferences"]);
     setToken(null);

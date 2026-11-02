@@ -457,6 +457,8 @@ export const GetSavedCompanionsResponseItem = zod.object({
   "reviewCount": zod.number(),
   "isLiked": zod.boolean(),
   "isSaved": zod.boolean(),
+  "isHighEnd": zod.boolean(),
+  "locked": zod.boolean(),
   "connectionId": zod.string().nullish()
 })
 export const GetSavedCompanionsResponse = zod.array(GetSavedCompanionsResponseItem)
@@ -616,6 +618,8 @@ export const ListCompanionsResponseItem = zod.object({
   "reviewCount": zod.number(),
   "isLiked": zod.boolean(),
   "isSaved": zod.boolean(),
+  "isHighEnd": zod.boolean(),
+  "locked": zod.boolean(),
   "connectionId": zod.string().nullish()
 })
 export const ListCompanionsResponse = zod.array(ListCompanionsResponseItem)
@@ -661,6 +665,8 @@ export const GetCompanionResponse = zod.object({
   "reviewCount": zod.number(),
   "isLiked": zod.boolean(),
   "isSaved": zod.boolean(),
+  "isHighEnd": zod.boolean(),
+  "locked": zod.boolean(),
   "connectionId": zod.string().nullish()
 }).and(zod.object({
   "photos": zod.array(zod.object({
@@ -780,6 +786,8 @@ export const ListDealsResponseItem = zod.object({
   "reviewCount": zod.number(),
   "isLiked": zod.boolean(),
   "isSaved": zod.boolean(),
+  "isHighEnd": zod.boolean(),
+  "locked": zod.boolean(),
   "connectionId": zod.string().nullish()
 })
 export const ListDealsResponse = zod.array(ListDealsResponseItem)
@@ -827,6 +835,8 @@ export const ListStoriesResponseItem = zod.object({
   "reviewCount": zod.number(),
   "isLiked": zod.boolean(),
   "isSaved": zod.boolean(),
+  "isHighEnd": zod.boolean(),
+  "locked": zod.boolean(),
   "connectionId": zod.string().nullish()
 }),
   "text": zod.string(),
@@ -1733,6 +1743,129 @@ export const AdminReviewVerificationResponse = zod.object({
   "reviewNote": zod.string(),
   "createdAt": zod.string().datetime({"offset":true}),
   "reviewedAt": zod.string().datetime({"offset":true}).nullish()
+})
+
+
+/**
+ * @summary Register this device for push notifications
+ */
+export const registerPushTokenBodyTokenMin = 10;
+export const registerPushTokenBodyTokenMax = 200;
+
+
+
+export const RegisterPushTokenBody = zod.object({
+  "token": zod.string().min(registerPushTokenBodyTokenMin).max(registerPushTokenBodyTokenMax),
+  "platform": zod.enum(['ios', 'android', 'web', 'unknown']).optional()
+})
+
+
+/**
+ * @summary Stop push notifications for this device
+ */
+export const unregisterPushTokenBodyTokenMin = 10;
+export const unregisterPushTokenBodyTokenMax = 200;
+
+
+
+export const UnregisterPushTokenBody = zod.object({
+  "token": zod.string().min(unregisterPushTokenBodyTokenMin).max(unregisterPushTokenBodyTokenMax),
+  "platform": zod.enum(['ios', 'android', 'web', 'unknown']).optional()
+})
+
+
+/**
+ * @summary Packages available for the current role
+ */
+export const ListPackagesResponseItem = zod.object({
+  "id": zod.string(),
+  "title": zod.string(),
+  "price": zod.number(),
+  "period": zod.string(),
+  "description": zod.string(),
+  "features": zod.array(zod.string()),
+  "audience": zod.enum(['seeker', 'companion']),
+  "highlighted": zod.boolean()
+})
+export const ListPackagesResponse = zod.array(ListPackagesResponseItem)
+
+
+/**
+ * @summary What the current user can access
+ */
+export const GetEntitlementsResponse = zod.object({
+  "activePackageId": zod.string(),
+  "activeUntil": zod.string().datetime({"offset":true}).nullish(),
+  "highEndAccess": zod.boolean(),
+  "unlimitedSuperRequests": zod.boolean(),
+  "featured": zod.boolean(),
+  "superRequestsLeftToday": zod.number(),
+  "checkoutEnabled": zod.boolean(),
+  "pendingRequest": zod.object({
+  "id": zod.string(),
+  "packageId": zod.string(),
+  "status": zod.enum(['requested', 'active', 'expired', 'cancelled']),
+  "amount": zod.number(),
+  "startsAt": zod.string().datetime({"offset":true}).nullish(),
+  "endsAt": zod.string().datetime({"offset":true}).nullish(),
+  "note": zod.string().optional(),
+  "createdAt": zod.string().datetime({"offset":true})
+}).nullish()
+})
+
+
+/**
+ * @summary Register interest in a package (checkout is not connected)
+ */
+export const requestSubscriptionBodyPackageIdMax = 40;
+
+export const requestSubscriptionBodyNoteMax = 300;
+
+
+
+export const RequestSubscriptionBody = zod.object({
+  "packageId": zod.string().max(requestSubscriptionBodyPackageIdMax),
+  "note": zod.string().max(requestSubscriptionBodyNoteMax).optional()
+})
+
+
+/**
+ * @summary Subscription requests and active grants (admin)
+ */
+export const AdminListSubscriptionsResponseItem = zod.object({
+  "id": zod.string(),
+  "packageId": zod.string(),
+  "status": zod.enum(['requested', 'active', 'expired', 'cancelled']),
+  "amount": zod.number(),
+  "startsAt": zod.string().datetime({"offset":true}).nullish(),
+  "endsAt": zod.string().datetime({"offset":true}).nullish(),
+  "note": zod.string().optional(),
+  "createdAt": zod.string().datetime({"offset":true})
+}).and(zod.object({
+  "userId": zod.string(),
+  "userName": zod.string(),
+  "userPhone": zod.string(),
+  "userRole": zod.enum(['seeker', 'companion'])
+}))
+export const AdminListSubscriptionsResponse = zod.array(AdminListSubscriptionsResponseItem)
+
+
+/**
+ * @summary Activate a package for a user (admin)
+ */
+export const adminGrantSubscriptionBodyPackageIdMax = 40;
+
+export const adminGrantSubscriptionBodyDaysMax = 366;
+
+export const adminGrantSubscriptionBodyNoteMax = 300;
+
+
+
+export const AdminGrantSubscriptionBody = zod.object({
+  "userId": zod.string(),
+  "packageId": zod.string().max(adminGrantSubscriptionBodyPackageIdMax),
+  "days": zod.number().min(1).max(adminGrantSubscriptionBodyDaysMax).optional(),
+  "note": zod.string().max(adminGrantSubscriptionBodyNoteMax).optional()
 })
 
 

@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
 import authRouter from "./auth";
+import billingRouter from "./billing";
 import bookingsRouter from "./bookings";
 import cityRouter from "./city";
 import companionsRouter from "./companions";
@@ -30,5 +31,6 @@ router.use(streamsRouter);
 router.use(loungesRouter);
 router.use(cityRouter);
 router.use(verificationRouter);
+router.use(billingRouter);
 
 export default router;

@@ -12,7 +12,8 @@ import {
   type Booking,
 } from "@workspace/db";
 import { currentUser, requireAuth, type AuthedUser } from "../lib/auth";
-import { badRequest, forbidden, notFound } from "../lib/errors";
+import { badRequest, forbidden, HttpError, notFound } from "../lib/errors";
+import { hasHighEndAccess, isHighEndProfile } from "../lib/billing";
 import { awardPoints, notify, POINTS } from "../lib/notify";
 import { meetupCode, toBooking } from "../lib/serializers";
 import { appendMessage, ensureConnection, partiesFor } from "./connections";
@@ -67,6 +68,9 @@ router.post("/bookings", async (req, res) => {
     .limit(1);
   const companion = target[0];
   if (!companion || companion.user.role !== "companion") throw notFound("Companion");
+  if (isHighEndProfile(companion.profile) && !(await hasHighEndAccess(me))) {
+    throw new HttpError(403, `${companion.user.name} is in the High-End collection. Upgrade to High-End Access to book.`, "high_end_locked");
+  }
   if (body.hours < companion.profile.minBookingHours) {
     throw badRequest(`${companion.user.name} requires a minimum of ${companion.profile.minBookingHours} hours`, "min_hours");
   }

@@ -94,6 +94,12 @@ export default function CompanionDetailScreen() {
   const handleConnect = () => {
     if (chatId) {
       router.push(`/chat/${chatId}`);
+    } else if (companion.locked) {
+      Alert.alert(
+        "High-End collection",
+        `${companion.name} is only available to clients with High-End Access (UGX 20,000/month).`,
+        [{ text: "Not now", style: "cancel" }, { text: "See packages", onPress: () => router.push("/vip") }],
+      );
     } else {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       setShowConnect(true);
@@ -167,6 +173,17 @@ export default function CompanionDetailScreen() {
           </View>
         </View>
         <View style={[styles.content, { paddingBottom: 110 + (Platform.OS === "web" ? 34 : insets.bottom) }]}>
+          {companion.isHighEnd && (
+            <View style={[styles.card, { backgroundColor: companion.locked ? "rgba(122,60,255,0.08)" : "rgba(61,169,255,0.08)", borderColor: companion.locked ? "rgba(122,60,255,0.4)" : "rgba(61,169,255,0.4)", flexDirection: "row", alignItems: "center", gap: 10 }]}>
+              <Ionicons name={companion.locked ? "lock-closed" : "diamond"} size={18} color={companion.locked ? "#7A3CFF" : "#3DA9FF"} />
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.sectionTitle, { color: colors.foreground, fontSize: 14 }]}>High-End collection</Text>
+                <Text style={[styles.bioText, { color: colors.mutedForeground, fontSize: 12 }]}>
+                  {companion.locked ? "Connecting and booking need High-End Access. Tap below to see packages." : "You have High-End Access."}
+                </Text>
+              </View>
+            </View>
+          )}
           {/* Trust row */}
           <View style={styles.trustRow}>
             <TrustBadge score={companion.trustScore} size="md" />
@@ -316,9 +333,9 @@ export default function CompanionDetailScreen() {
           }]}
           onPress={handleConnect}
         >
-          <Ionicons name={chatId ? "chatbubble" : "heart"} size={18} color={chatId ? colors.primary : "#fff"} />
+          <Ionicons name={chatId ? "chatbubble" : companion.locked ? "lock-closed" : "heart"} size={18} color={chatId ? colors.primary : "#fff"} />
           <Text style={[styles.primaryBtnText, { color: chatId ? colors.primary : "#fff" }]}>
-            {chatId ? "Message" : isLiked ? "Connect" : "Connect Tonight"}
+            {chatId ? "Message" : companion.locked ? "Unlock High-End" : isLiked ? "Connect" : "Connect Tonight"}
           </Text>
         </TouchableOpacity>
       </View>

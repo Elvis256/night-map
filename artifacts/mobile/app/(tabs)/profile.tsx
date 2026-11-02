@@ -588,6 +588,22 @@ export default function ProfileScreen() {
       {userProfile.isCompanion && (
         <>
           <Text style={[styles.sectionHeader, { color: colors.mutedForeground }]}>MY LISTING</Text>
+          {((cp?.menu.length ?? 0) === 0 || !userProfile.photoUrl) && (
+            <TouchableOpacity
+              style={{ marginHorizontal: 16, marginBottom: 10, flexDirection: "row", alignItems: "center", gap: 12, padding: 14, borderRadius: 16, borderWidth: 1, backgroundColor: "rgba(31,191,107,0.08)", borderColor: "rgba(31,191,107,0.4)" }}
+              onPress={() => router.push("/companion-setup")}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="sparkles" size={20} color="#1FBF6B" />
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: "#1FBF6B", fontFamily: "Inter_700Bold", fontSize: 14 }}>Complete your listing</Text>
+                <Text style={{ color: colors.mutedForeground, fontFamily: "Inter_400Regular", fontSize: 12 }}>
+                  {!userProfile.photoUrl ? "Add a photo" : "Add your menu"} · listings with a photo and menu get far more requests
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color="#1FBF6B" />
+            </TouchableOpacity>
+          )}
           <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border, padding: 14, gap: 12 }]}>
             <View>
               <Text style={[styles.listingLabel, { color: colors.mutedForeground }]}>AVAILABILITY</Text>

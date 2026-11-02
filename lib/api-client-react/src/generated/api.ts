@@ -20,6 +20,7 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  AdminSubscription,
   AdminVerification,
   AuthResponse,
   Booking,
@@ -32,7 +33,9 @@ import type {
   CreateConnectionRequest,
   CreateLoungeRequest,
   CreateReviewRequest,
+  Entitlements,
   ErrorResponse,
+  GrantSubscriptionRequest,
   HealthStatus,
   IncidentRequest,
   ListCompanionsParams,
@@ -48,10 +51,12 @@ import type {
   Notification,
   OutageReport,
   OutageRequest,
+  Package,
   Photo,
   PostStoryRequest,
   PresenceRequest,
   ProfileView,
+  PushTokenRequest,
   ReferralSummary,
   RegisterRequest,
   RespondConnectionRequest,
@@ -68,6 +73,8 @@ import type {
   Stream,
   StreamComment,
   SubmitVerificationRequest,
+  Subscription,
+  SubscriptionRequest,
   SwipeRequest,
   SwipeSummary,
   TrustedContact,
@@ -5068,5 +5075,520 @@ export const useAdminReviewVerification = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getAdminReviewVerificationMutationOptions(options));
+    }
+
+export const getRegisterPushTokenUrl = () => {
+
+
+
+
+  return `/api/me/push-token`
+}
+
+/**
+ * @summary Register this device for push notifications
+ */
+export const registerPushToken = async (pushTokenRequest: PushTokenRequest, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getRegisterPushTokenUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      pushTokenRequest,)
+  }
+);}
+
+
+
+
+export const getRegisterPushTokenMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof registerPushToken>>, TError,{data: BodyType<PushTokenRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof registerPushToken>>, TError,{data: BodyType<PushTokenRequest>}, TContext> => {
+
+const mutationKey = ['registerPushToken'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof registerPushToken>>, {data: BodyType<PushTokenRequest>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  registerPushToken(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RegisterPushTokenMutationResult = NonNullable<Awaited<ReturnType<typeof registerPushToken>>>
+    export type RegisterPushTokenMutationBody = BodyType<PushTokenRequest>
+    export type RegisterPushTokenMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Register this device for push notifications
+ */
+export const useRegisterPushToken = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof registerPushToken>>, TError,{data: BodyType<PushTokenRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof registerPushToken>>,
+        TError,
+        {data: BodyType<PushTokenRequest>},
+        TContext
+      > => {
+      return useMutation(getRegisterPushTokenMutationOptions(options));
+    }
+
+export const getUnregisterPushTokenUrl = () => {
+
+
+
+
+  return `/api/me/push-token`
+}
+
+/**
+ * @summary Stop push notifications for this device
+ */
+export const unregisterPushToken = async (pushTokenRequest: PushTokenRequest, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getUnregisterPushTokenUrl(),
+  {
+    ...options,
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      pushTokenRequest,)
+  }
+);}
+
+
+
+
+export const getUnregisterPushTokenMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof unregisterPushToken>>, TError,{data: BodyType<PushTokenRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof unregisterPushToken>>, TError,{data: BodyType<PushTokenRequest>}, TContext> => {
+
+const mutationKey = ['unregisterPushToken'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof unregisterPushToken>>, {data: BodyType<PushTokenRequest>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  unregisterPushToken(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UnregisterPushTokenMutationResult = NonNullable<Awaited<ReturnType<typeof unregisterPushToken>>>
+    export type UnregisterPushTokenMutationBody = BodyType<PushTokenRequest>
+    export type UnregisterPushTokenMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Stop push notifications for this device
+ */
+export const useUnregisterPushToken = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof unregisterPushToken>>, TError,{data: BodyType<PushTokenRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof unregisterPushToken>>,
+        TError,
+        {data: BodyType<PushTokenRequest>},
+        TContext
+      > => {
+      return useMutation(getUnregisterPushTokenMutationOptions(options));
+    }
+
+export const getListPackagesUrl = () => {
+
+
+
+
+  return `/api/packages`
+}
+
+/**
+ * @summary Packages available for the current role
+ */
+export const listPackages = async ( options?: RequestInit): Promise<Package[]> => {
+
+  return customFetch<Package[]>(getListPackagesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListPackagesQueryKey = () => {
+    return [
+    `/api/packages`
+    ] as const;
+    }
+
+
+export const getListPackagesQueryOptions = <TData = Awaited<ReturnType<typeof listPackages>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listPackages>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListPackagesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listPackages>>> = ({ signal }) => listPackages({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listPackages>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListPackagesQueryResult = NonNullable<Awaited<ReturnType<typeof listPackages>>>
+export type ListPackagesQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Packages available for the current role
+ */
+
+export function useListPackages<TData = Awaited<ReturnType<typeof listPackages>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listPackages>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListPackagesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetEntitlementsUrl = () => {
+
+
+
+
+  return `/api/me/entitlements`
+}
+
+/**
+ * @summary What the current user can access
+ */
+export const getEntitlements = async ( options?: RequestInit): Promise<Entitlements> => {
+
+  return customFetch<Entitlements>(getGetEntitlementsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetEntitlementsQueryKey = () => {
+    return [
+    `/api/me/entitlements`
+    ] as const;
+    }
+
+
+export const getGetEntitlementsQueryOptions = <TData = Awaited<ReturnType<typeof getEntitlements>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getEntitlements>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetEntitlementsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getEntitlements>>> = ({ signal }) => getEntitlements({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getEntitlements>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetEntitlementsQueryResult = NonNullable<Awaited<ReturnType<typeof getEntitlements>>>
+export type GetEntitlementsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary What the current user can access
+ */
+
+export function useGetEntitlements<TData = Awaited<ReturnType<typeof getEntitlements>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getEntitlements>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetEntitlementsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getRequestSubscriptionUrl = () => {
+
+
+
+
+  return `/api/subscriptions`
+}
+
+/**
+ * @summary Register interest in a package (checkout is not connected)
+ */
+export const requestSubscription = async (subscriptionRequest: SubscriptionRequest, options?: RequestInit): Promise<Subscription> => {
+
+  return customFetch<Subscription>(getRequestSubscriptionUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      subscriptionRequest,)
+  }
+);}
+
+
+
+
+export const getRequestSubscriptionMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof requestSubscription>>, TError,{data: BodyType<SubscriptionRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof requestSubscription>>, TError,{data: BodyType<SubscriptionRequest>}, TContext> => {
+
+const mutationKey = ['requestSubscription'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof requestSubscription>>, {data: BodyType<SubscriptionRequest>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  requestSubscription(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RequestSubscriptionMutationResult = NonNullable<Awaited<ReturnType<typeof requestSubscription>>>
+    export type RequestSubscriptionMutationBody = BodyType<SubscriptionRequest>
+    export type RequestSubscriptionMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Register interest in a package (checkout is not connected)
+ */
+export const useRequestSubscription = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof requestSubscription>>, TError,{data: BodyType<SubscriptionRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof requestSubscription>>,
+        TError,
+        {data: BodyType<SubscriptionRequest>},
+        TContext
+      > => {
+      return useMutation(getRequestSubscriptionMutationOptions(options));
+    }
+
+export const getAdminListSubscriptionsUrl = () => {
+
+
+
+
+  return `/api/admin/subscriptions`
+}
+
+/**
+ * @summary Subscription requests and active grants (admin)
+ */
+export const adminListSubscriptions = async ( options?: RequestInit): Promise<AdminSubscription[]> => {
+
+  return customFetch<AdminSubscription[]>(getAdminListSubscriptionsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getAdminListSubscriptionsQueryKey = () => {
+    return [
+    `/api/admin/subscriptions`
+    ] as const;
+    }
+
+
+export const getAdminListSubscriptionsQueryOptions = <TData = Awaited<ReturnType<typeof adminListSubscriptions>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof adminListSubscriptions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getAdminListSubscriptionsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof adminListSubscriptions>>> = ({ signal }) => adminListSubscriptions({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof adminListSubscriptions>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type AdminListSubscriptionsQueryResult = NonNullable<Awaited<ReturnType<typeof adminListSubscriptions>>>
+export type AdminListSubscriptionsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Subscription requests and active grants (admin)
+ */
+
+export function useAdminListSubscriptions<TData = Awaited<ReturnType<typeof adminListSubscriptions>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof adminListSubscriptions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getAdminListSubscriptionsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getAdminGrantSubscriptionUrl = () => {
+
+
+
+
+  return `/api/admin/subscriptions`
+}
+
+/**
+ * @summary Activate a package for a user (admin)
+ */
+export const adminGrantSubscription = async (grantSubscriptionRequest: GrantSubscriptionRequest, options?: RequestInit): Promise<AdminSubscription> => {
+
+  return customFetch<AdminSubscription>(getAdminGrantSubscriptionUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      grantSubscriptionRequest,)
+  }
+);}
+
+
+
+
+export const getAdminGrantSubscriptionMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof adminGrantSubscription>>, TError,{data: BodyType<GrantSubscriptionRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof adminGrantSubscription>>, TError,{data: BodyType<GrantSubscriptionRequest>}, TContext> => {
+
+const mutationKey = ['adminGrantSubscription'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof adminGrantSubscription>>, {data: BodyType<GrantSubscriptionRequest>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  adminGrantSubscription(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AdminGrantSubscriptionMutationResult = NonNullable<Awaited<ReturnType<typeof adminGrantSubscription>>>
+    export type AdminGrantSubscriptionMutationBody = BodyType<GrantSubscriptionRequest>
+    export type AdminGrantSubscriptionMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Activate a package for a user (admin)
+ */
+export const useAdminGrantSubscription = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof adminGrantSubscription>>, TError,{data: BodyType<GrantSubscriptionRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof adminGrantSubscription>>,
+        TError,
+        {data: BodyType<GrantSubscriptionRequest>},
+        TContext
+      > => {
+      return useMutation(getAdminGrantSubscriptionMutationOptions(options));
     }
 
