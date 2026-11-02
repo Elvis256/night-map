@@ -2,44 +2,72 @@ import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import React, { useState } from "react";
 import {
+  ActivityIndicator,
   Modal,
   Pressable,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
 import { useColors } from "@workspace/nightmap-design-system/hooks/use-colors";
 import { Companion, formatUGX, useApp } from "@/context/AppContext";
+import { errorMessage } from "@/lib/api";
 
 interface ConnectionModalProps {
   companion: Companion | null;
   visible: boolean;
   onClose: () => void;
-  onConnected: () => void;
+  onConnected: (matchId: string) => void;
 }
 
 export function ConnectionModal({ companion, visible, onClose, onConnected }: ConnectionModalProps) {
   const colors = useColors("dark");
   const { addMatch } = useApp();
   const [step, setStep] = useState<"request" | "done">("request");
+  const [type, setType] = useState<"standard" | "super">("standard");
+  const [message, setMessage] = useState("");
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState("");
+  const [matchId, setMatchId] = useState<string | null>(null);
 
-  const handleConnect = () => {
-    if (!companion) return;
+  const handleConnect = async () => {
+    if (!companion || sending) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    addMatch(companion, "standard");
-    setStep("done");
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    setSending(true);
+    setError("");
+    try {
+      const match = await addMatch(companion, type, message.trim() || undefined);
+      setMatchId(match.id);
+      setStep("done");
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (err) {
+      setError(errorMessage(err, "Could not send the request."));
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const reset = () => {
+    setStep("request");
+    setType("standard");
+    setMessage("");
+    setError("");
+    setMatchId(null);
   };
 
   const handleClose = () => {
-    setStep("request");
+    reset();
     onClose();
   };
 
   const handleDone = () => {
-    setStep("request");
-    onConnected();
+    const id = matchId;
+    reset();
+    if (id) onConnected(id);
+    else onClose();
   };
 
   if (!companion) return null;
@@ -49,21 +77,21 @@ export function ConnectionModal({ companion, visible, onClose, onConnected }: Co
       <Pressable style={styles.backdrop} onPress={step === "request" ? handleClose : undefined}>
         <Pressable style={[styles.sheet, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <View style={[styles.handle, { backgroundColor: colors.border }]} />
-
           {step === "done" ? (
             <View style={styles.doneState}>
               <View style={[styles.doneIcon, { backgroundColor: "rgba(255,78,98,0.15)" }]}>
                 <Ionicons name="checkmark-circle" size={56} color={colors.primary} />
               </View>
-              <Text style={[styles.doneTitle, { color: colors.foreground }]}>Request saved</Text>
+              <Text style={[styles.doneTitle, { color: colors.foreground }]}>Request sent</Text>
               <Text style={[styles.doneSubtitle, { color: colors.mutedForeground }]}>
-                This preview saves the connection on this device. It does not notify {companion.name} or process a payment.
+                {companion.name} has been notified. You can start chatting right away.
               </Text>
               <TouchableOpacity
                 style={[styles.requestBtn, { backgroundColor: colors.primary }]}
                 onPress={handleDone}
               >
-                <Text style={styles.requestBtnText}>Close</Text>
+                <Ionicons name="chatbubble-ellipses-outline" size={16} color="#fff" />
+                <Text style={styles.requestBtnText}>Open chat</Text>
               </TouchableOpacity>
             </View>
           ) : (
@@ -81,33 +109,56 @@ export function ConnectionModal({ companion, visible, onClose, onConnected }: Co
                   </Text>
                 </View>
               </View>
-
               <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>Connection request</Text>
-              <View style={[styles.requestCard, { backgroundColor: colors.muted, borderColor: colors.border }]}>
+              <TouchableOpacity
+                style={[styles.requestCard, { backgroundColor: colors.muted, borderColor: type === "standard" ? colors.primary : colors.border }]}
+                onPress={() => { setType("standard"); Haptics.selectionAsync(); }}
+                activeOpacity={0.8}
+              >
                 <View style={[styles.requestIcon, { backgroundColor: "rgba(255,78,98,0.12)" }]}>
                   <Ionicons name="chatbubble-ellipses-outline" size={19} color={colors.primary} />
                 </View>
                 <View style={styles.optionText}>
-                  <Text style={[styles.optionLabel, { color: colors.foreground }]}>Free standard request</Text>
+                  <Text style={[styles.optionLabel, { color: colors.foreground }]}>Standard request</Text>
                   <Text style={[styles.optionDesc, { color: colors.mutedForeground }]}>
-                    Start a conversation without a per-request fee.
+                    Start a conversation. Free, no per-request fee.
                   </Text>
                 </View>
-              </View>
-
-              <View style={[styles.paymentNote, { backgroundColor: colors.muted, borderColor: colors.border }]}>
-                <Ionicons name="information-circle-outline" size={15} color={colors.accent} />
-                <Text style={[styles.paymentNoteText, { color: colors.mutedForeground }]}>
-                  This preview stores the request locally. No payment or escrow is provided.
-                </Text>
-              </View>
-
+                {type === "standard" && <Ionicons name="checkmark-circle" size={18} color={colors.primary} />}
+              </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.requestBtn, { backgroundColor: colors.primary }]}
-                onPress={handleConnect}
+                style={[styles.requestCard, { backgroundColor: colors.muted, borderColor: type === "super" ? "#FF8A3D" : colors.border }]}
+                onPress={() => { setType("super"); Haptics.selectionAsync(); }}
+                activeOpacity={0.8}
               >
-                <Ionicons name="paper-plane-outline" size={16} color="#fff" />
-                <Text style={styles.requestBtnText}>Send request</Text>
+                <View style={[styles.requestIcon, { backgroundColor: "rgba(255,138,61,0.12)" }]}>
+                  <Ionicons name="star" size={19} color="#FF8A3D" />
+                </View>
+                <View style={styles.optionText}>
+                  <Text style={[styles.optionLabel, { color: colors.foreground }]}>Super request</Text>
+                  <Text style={[styles.optionDesc, { color: colors.mutedForeground }]}>
+                    Stands out in their inbox with a ⭐ badge.
+                  </Text>
+                </View>
+                {type === "super" && <Ionicons name="checkmark-circle" size={18} color="#FF8A3D" />}
+              </TouchableOpacity>
+              <TextInput
+                style={[styles.messageInput, { backgroundColor: colors.muted, borderColor: colors.border, color: colors.foreground }]}
+                placeholder={`Say hi to ${companion.name}… (optional)`}
+                placeholderTextColor={colors.mutedForeground}
+                value={message}
+                onChangeText={setMessage}
+                maxLength={300}
+                multiline
+              />
+              {error ? <Text style={[styles.paymentNoteText, { color: "#FF4E62", textAlign: "center" }]}>{error}</Text> : null}
+              <TouchableOpacity
+                style={[styles.requestBtn, { backgroundColor: type === "super" ? "#FF8A3D" : colors.primary }]}
+                onPress={handleConnect}
+                disabled={sending}
+              >
+                {sending ? <ActivityIndicator color="#fff" size="small" /> : <Ionicons name="paper-plane-outline" size={16} color="#fff" />}
+                <Text style={styles.requestBtnText}>{sending ? "Sending…" : type === "super" ? "Send super request" : "Send request"}</Text>
               </TouchableOpacity>
             </>
           )}
@@ -118,6 +169,10 @@ export function ConnectionModal({ companion, visible, onClose, onConnected }: Co
 }
 
 const styles = StyleSheet.create({
+  messageInput: {
+    borderRadius: 14, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 12,
+    fontFamily: "Inter_400Regular", fontSize: 14, minHeight: 64, textAlignVertical: "top",
+  },
   backdrop: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.7)",

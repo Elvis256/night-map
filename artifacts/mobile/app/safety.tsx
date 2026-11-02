@@ -1,8 +1,10 @@
 import * as Haptics from "expo-haptics";
+import * as Location from "expo-location";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   Animated,
   Modal,
@@ -15,18 +17,19 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import {
+  addTrustedContact,
+  deleteTrustedContact,
+  getListTrustedContactsQueryKey,
+  reportIncident,
+  safetyCheckIn,
+  triggerPanic,
+  useListTrustedContacts,
+  type TrustedContact,
+} from "@workspace/api-client-react";
 import { useColors } from "@workspace/nightmap-design-system/hooks/use-colors";
-
-interface TrustedContact {
-  id: string;
-  name: string;
-  phone: string;
-  relation: string;
-}
-
-const DEFAULT_CONTACTS: TrustedContact[] = [
-  { id: "tc1", name: "Miriam K.", phone: "+256 701 234 567", relation: "Sister" },
-];
+import { useApp } from "@/context/AppContext";
+import { errorMessage } from "@/lib/api";
 
 const SAFETY_TIPS = [
   { icon: "location-outline",        color: "#3DA9FF", tip: "Always share your live location with a trusted contact before a meetup" },
@@ -34,33 +37,52 @@ const SAFETY_TIPS = [
   { icon: "shield-checkmark-outline",color: "#FF8A3D", tip: "Use the in-app meetup code to confirm identity at meetup" },
   { icon: "phone-portrait-outline",  color: "#7A3CFF", tip: "Keep your phone charged and mobile data on during the evening" },
   { icon: "eye-off-outline",         color: "#FF4E62", tip: "Never share your home address in chat before meeting in person" },
-  { icon: "cash-outline",            color: "#1FBF6B", tip: "NightMap does not process payments in this preview. Never send money before verifying a person and agreeing on safe terms." },
+  { icon: "cash-outline",            color: "#1FBF6B", tip: "NightMap does not hold payments. Never send money before verifying a person and agreeing on safe terms." },
 ];
-
 const CHECK_IN_INTERVALS = [
   { label: "30 min", seconds: 1800 },
   { label: "1 hr",   seconds: 3600 },
   { label: "2 hrs",  seconds: 7200 },
 ];
 
+export async function currentPosition(fallback: { lat: number; lng: number } | null): Promise<{ lat?: number; lng?: number }> {
+  try {
+    const { status } = await Location.getForegroundPermissionsAsync();
+    if (status !== "granted") {
+      const req = await Location.requestForegroundPermissionsAsync();
+      if (req.status !== "granted") return fallback ?? {};
+    }
+    const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+    return { lat: pos.coords.latitude, lng: pos.coords.longitude };
+  } catch {
+    return fallback ?? {};
+  }
+}
+
 function AddContactModal({ visible, onClose, onAdd }: {
   visible: boolean;
   onClose: () => void;
-  onAdd: (c: TrustedContact) => void;
+  onAdd: (c: { name: string; phone: string; relation: string }) => Promise<void>;
 }) {
   const colors = useColors("dark");
   const insets = useSafeAreaInsets();
   const [name, setName]       = useState("");
   const [phone, setPhone]     = useState("");
   const [relation, setRelation] = useState("");
-
-  const handleAdd = () => {
-    if (!name.trim() || !phone.trim()) return;
-    onAdd({ id: Date.now().toString(), name: name.trim(), phone: phone.trim(), relation: relation.trim() || "Contact" });
-    setName(""); setPhone(""); setRelation("");
-    onClose();
+  const [saving, setSaving] = useState(false);
+  const handleAdd = async () => {
+    if (!name.trim() || !phone.trim() || saving) return;
+    setSaving(true);
+    try {
+      await onAdd({ name: name.trim(), phone: phone.trim(), relation: relation.trim() || "Contact" });
+      setName(""); setPhone(""); setRelation("");
+      onClose();
+    } catch (err) {
+      Alert.alert("Something went wrong", errorMessage(err));
+    } finally {
+      setSaving(false);
+    }
   };
-
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.modalBackdrop}>
@@ -68,7 +90,7 @@ function AddContactModal({ visible, onClose, onAdd }: {
           <View style={[styles.handle, { backgroundColor: colors.border }]} />
           <Text style={[styles.addTitle, { color: colors.foreground }]}>Add Trusted Contact</Text>
           <Text style={[styles.addSub, { color: colors.mutedForeground }]}>
-            This person will receive your location when you check in
+            This person will receive your location when you check in or press panic
           </Text>
           {[
             { label: "Full Name", value: name, onChange: setName, placeholder: "e.g. Amara Diallo", keyboard: "default" as const },
@@ -90,9 +112,69 @@ function AddContactModal({ visible, onClose, onAdd }: {
           <TouchableOpacity
             style={[styles.addBtn, { backgroundColor: (name && phone) ? "#1FBF6B" : colors.muted }]}
             onPress={handleAdd}
-            disabled={!name || !phone}
+            disabled={!name || !phone || saving}
           >
-            <Text style={[styles.addBtnText, { color: (name && phone) ? "#fff" : colors.mutedForeground }]}>Save Contact</Text>
+            {saving ? <ActivityIndicator color="#fff" /> : (
+              <Text style={[styles.addBtnText, { color: (name && phone) ? "#fff" : colors.mutedForeground }]}>Save Contact</Text>
+            )}
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.cancelBtn} onPress={onClose}>
+            <Text style={[styles.cancelBtnText, { color: colors.mutedForeground }]}>Cancel</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+function IncidentModal({ visible, onClose, onSubmit }: {
+  visible: boolean;
+  onClose: () => void;
+  onSubmit: (description: string) => Promise<void>;
+}) {
+  const colors = useColors("dark");
+  const insets = useSafeAreaInsets();
+  const [text, setText] = useState("");
+  const [sending, setSending] = useState(false);
+  const handleSubmit = async () => {
+    if (!text.trim() || sending) return;
+    setSending(true);
+    try {
+      await onSubmit(text.trim());
+      setText("");
+      onClose();
+    } catch (err) {
+      Alert.alert("Something went wrong", errorMessage(err));
+    } finally {
+      setSending(false);
+    }
+  };
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <View style={styles.modalBackdrop}>
+        <View style={[styles.addSheet, { backgroundColor: colors.card, paddingBottom: insets.bottom + 16 }]}>
+          <View style={[styles.handle, { backgroundColor: colors.border }]} />
+          <Text style={[styles.addTitle, { color: colors.foreground }]}>Report an Incident</Text>
+          <Text style={[styles.addSub, { color: colors.mutedForeground }]}>
+            Confidential. The NightMap safety team is notified immediately and will follow up with you.
+          </Text>
+          <TextInput
+            style={[styles.fieldInput, { backgroundColor: colors.muted, color: colors.foreground, borderColor: colors.border, minHeight: 110, textAlignVertical: "top" }]}
+            placeholder="Describe what happened, who was involved and where…"
+            placeholderTextColor={colors.mutedForeground}
+            value={text}
+            onChangeText={setText}
+            multiline
+            maxLength={2000}
+          />
+          <TouchableOpacity
+            style={[styles.addBtn, { backgroundColor: text.trim() ? "#FF4E62" : colors.muted }]}
+            onPress={handleSubmit}
+            disabled={!text.trim() || sending}
+          >
+            {sending ? <ActivityIndicator color="#fff" /> : (
+              <Text style={[styles.addBtnText, { color: text.trim() ? "#fff" : colors.mutedForeground }]}>Send report</Text>
+            )}
           </TouchableOpacity>
           <TouchableOpacity style={styles.cancelBtn} onPress={onClose}>
             <Text style={[styles.cancelBtnText, { color: colors.mutedForeground }]}>Cancel</Text>
@@ -106,16 +188,19 @@ function AddContactModal({ visible, onClose, onAdd }: {
 export default function SafetyScreen() {
   const colors = useColors("dark");
   const insets = useSafeAreaInsets();
-  const [contacts, setContacts]             = useState<TrustedContact[]>(DEFAULT_CONTACTS);
+  const { coords, invalidate, userProfile } = useApp();
+  const contactsQuery = useListTrustedContacts({ query: { queryKey: getListTrustedContactsQueryKey(), staleTime: 30_000 } });
+  const contacts: TrustedContact[] = contactsQuery.data ?? [];
   const [checkInActive, setCheckInActive]   = useState(false);
   const [checkInInterval, setCheckInInterval] = useState(0);
   const [timeLeft, setTimeLeft]             = useState(0);
   const [panicMode, setPanicMode]           = useState(false);
   const [showAddContact, setShowAddContact] = useState(false);
+  const [showIncident, setShowIncident]     = useState(false);
+  const [checkingIn, setCheckingIn]         = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const panicScale  = useRef(new Animated.Value(1)).current;
   const panicGlow   = useRef(new Animated.Value(0)).current;
-
   useEffect(() => {
     if (checkInActive) {
       setTimeLeft(CHECK_IN_INTERVALS[checkInInterval].seconds);
@@ -136,42 +221,94 @@ export default function SafetyScreen() {
     return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
   }, [checkInActive, checkInInterval]);
 
-  const handlePanic = () => {
+  const contactNames = () => {
+    const names = contacts.map(c => c.name);
+    if (names.length === 0 && userProfile.trustedContact) names.push(userProfile.trustedContact);
+    return names.length ? names.join(", ") : "your trusted contacts";
+  };
+
+  const handlePanic = async () => {
+    if (panicMode) return;
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     setPanicMode(true);
-    Animated.loop(
+    const glowLoop = Animated.loop(
       Animated.sequence([
         Animated.timing(panicGlow, { toValue: 1, duration: 500, useNativeDriver: true }),
         Animated.timing(panicGlow, { toValue: 0, duration: 500, useNativeDriver: true }),
       ])
-    ).start();
+    );
+    glowLoop.start();
     Animated.sequence([
       Animated.timing(panicScale, { toValue: 1.15, duration: 150, useNativeDriver: true }),
       Animated.spring(panicScale, { toValue: 1, useNativeDriver: true, friction: 4 }),
     ]).start();
-    setTimeout(() => {
-      setPanicMode(false);
-      panicGlow.stopAnimation();
+    try {
+      const pos = await currentPosition(coords);
+      const event = await triggerPanic({ lat: pos.lat, lng: pos.lng });
       Alert.alert(
         "🚨 Emergency Alert Sent",
-        `Your location and a distress signal have been sent to ${contacts[0]?.name ?? "your emergency contact"} and the NightMap safety team.`,
+        event.contactsNotified > 0
+          ? `Your location and a distress signal were sent to ${event.contactsNotified} trusted contact${event.contactsNotified > 1 ? "s" : ""} and the NightMap safety team.`
+          : "Your distress signal was sent to the NightMap safety team. Add a trusted contact so they are alerted too.",
         [{ text: "OK" }]
       );
-    }, 3000);
+    } catch (err) {
+      Alert.alert("Alert not sent", errorMessage(err, "Could not reach NightMap. Call your emergency contact directly."));
+    } finally {
+      glowLoop.stop();
+      panicGlow.setValue(0);
+      setPanicMode(false);
+    }
   };
-
-  const handleCheckIn = () => {
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    setTimeLeft(CHECK_IN_INTERVALS[checkInInterval].seconds);
-    Alert.alert("Check-In Sent ✅", `Your location has been shared with ${contacts.map(c => c.name).join(", ")}.`);
+  const handleCheckIn = async () => {
+    if (checkingIn) return;
+    setCheckingIn(true);
+    try {
+      const pos = await currentPosition(coords);
+      const event = await safetyCheckIn({ lat: pos.lat, lng: pos.lng });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setTimeLeft(CHECK_IN_INTERVALS[checkInInterval].seconds);
+      Alert.alert(
+        "Check-In Sent ✅",
+        event.contactsNotified > 0
+          ? `Your location has been shared with ${contactNames()}.`
+          : "Check-in recorded. Add a trusted contact to share your location with someone you trust.",
+      );
+    } catch (err) {
+      Alert.alert("Something went wrong", errorMessage(err));
+    } finally {
+      setCheckingIn(false);
+    }
   };
-
+  const handleAddContact = async (c: { name: string; phone: string; relation: string }) => {
+    await addTrustedContact(c);
+    invalidate([getListTrustedContactsQueryKey()]);
+  };
+  const handleRemoveContact = (contact: TrustedContact) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    Alert.alert("Remove Contact", `Remove ${contact.name} as a trusted contact?`, [
+      { text: "Cancel" },
+      {
+        text: "Remove",
+        style: "destructive",
+        onPress: () => {
+          deleteTrustedContact(contact.id)
+            .then(() => invalidate([getListTrustedContactsQueryKey()]))
+            .catch((err) => Alert.alert("Something went wrong", errorMessage(err)));
+        },
+      },
+    ]);
+  };
+  const handleIncident = async (description: string) => {
+    const pos = await currentPosition(coords);
+    await reportIncident({ description, lat: pos.lat, lng: pos.lng });
+    Alert.alert("Report received", "Our safety team has been notified and will contact you within 30 minutes.\n\nEmail: safety@nightmap.app\nHotline: +256 800 100 200");
+  };
   const formatTime = (s: number) => {
     const m = Math.floor(s / 60).toString().padStart(2, "0");
     const sec = (s % 60).toString().padStart(2, "0");
     return `${m}:${sec}`;
   };
-
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       <View style={[styles.header, { paddingTop: Platform.OS === "web" ? 56 : insets.top + 4, borderBottomColor: colors.border }]}>
@@ -180,11 +317,12 @@ export default function SafetyScreen() {
         </TouchableOpacity>
         <View>
           <Text style={[styles.headerTitle, { color: colors.foreground }]}>Safety Hub</Text>
-          <Text style={[styles.headerSub, { color: "#1FBF6B" }]}>You're protected</Text>
+          <Text style={[styles.headerSub, { color: contacts.length > 0 ? "#1FBF6B" : "#FF8A3D" }]}>
+            {contacts.length > 0 ? `${contacts.length} trusted contact${contacts.length > 1 ? "s" : ""} on alert` : "Add a trusted contact"}
+          </Text>
         </View>
         <View style={{ width: 36 }} />
       </View>
-
       <ScrollView
         contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
         showsVerticalScrollIndicator={false}
@@ -195,7 +333,7 @@ export default function SafetyScreen() {
             <Animated.View style={[styles.panicGlowRing, { opacity: panicGlow }]} />
           )}
           <Text style={[styles.panicLabel, { color: colors.mutedForeground }]}>EMERGENCY PANIC BUTTON</Text>
-          <TouchableOpacity onPress={handlePanic} activeOpacity={0.85}>
+          <TouchableOpacity onPress={handlePanic} activeOpacity={0.85} disabled={panicMode}>
             <Animated.View style={[styles.panicBtn, panicMode && styles.panicBtnActive, { transform: [{ scale: panicScale }] }]}>
               <Ionicons name="warning" size={36} color="#fff" />
               <Text style={styles.panicBtnText}>{panicMode ? "SENDING ALERT..." : "PANIC"}</Text>
@@ -205,7 +343,6 @@ export default function SafetyScreen() {
             Instantly alerts your trusted contacts and NightMap safety team with your live location
           </Text>
         </View>
-
         {/* Check-In Timer */}
         <Text style={[styles.sectionHeader, { color: colors.mutedForeground }]}>CHECK-IN TIMER</Text>
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -213,7 +350,7 @@ export default function SafetyScreen() {
             <View style={{ flex: 1 }}>
               <Text style={[styles.cardTitle, { color: colors.foreground }]}>Auto Check-In</Text>
               <Text style={[styles.cardSub, { color: colors.mutedForeground }]}>
-                {checkInActive ? `Next check-in: ${formatTime(timeLeft)}` : "Notifies contacts at set intervals"}
+                {checkInActive ? `Next check-in: ${formatTime(timeLeft)}` : "Reminds you to check in at set intervals"}
               </Text>
             </View>
             <TouchableOpacity
@@ -230,27 +367,26 @@ export default function SafetyScreen() {
             {CHECK_IN_INTERVALS.map((iv, i) => (
               <TouchableOpacity
                 key={iv.label}
-                style={[styles.ivChip, checkInInterval === i && { backgroundColor: "rgba(61,169,255,0.12)", borderColor: "#3DA9FF" }, { borderColor: colors.border, backgroundColor: colors.muted }]}
+                style={[styles.ivChip, { borderColor: colors.border, backgroundColor: colors.muted }, checkInInterval === i && { backgroundColor: "rgba(61,169,255,0.12)", borderColor: "#3DA9FF" }]}
                 onPress={() => setCheckInInterval(i)}
               >
                 <Text style={[styles.ivChipText, { color: checkInInterval === i ? "#3DA9FF" : colors.mutedForeground }]}>{iv.label}</Text>
               </TouchableOpacity>
             ))}
           </View>
-          {checkInActive && (
-            <TouchableOpacity
-              style={[styles.checkInBtn, { backgroundColor: "#1FBF6B" }]}
-              onPress={handleCheckIn}
-            >
-              <Ionicons name="shield-checkmark" size={16} color="#fff" />
-              <Text style={styles.checkInBtnText}>Check In Now</Text>
-            </TouchableOpacity>
-          )}
+          <TouchableOpacity
+            style={[styles.checkInBtn, { backgroundColor: "#1FBF6B", opacity: checkingIn ? 0.7 : 1 }]}
+            onPress={handleCheckIn}
+            disabled={checkingIn}
+          >
+            {checkingIn ? <ActivityIndicator color="#fff" size="small" /> : <Ionicons name="shield-checkmark" size={16} color="#fff" />}
+            <Text style={styles.checkInBtnText}>{checkingIn ? "Sharing location…" : "Check In Now"}</Text>
+          </TouchableOpacity>
         </View>
-
         {/* Trusted Contacts */}
         <Text style={[styles.sectionHeader, { color: colors.mutedForeground }]}>TRUSTED CONTACTS</Text>
         <View style={{ paddingHorizontal: 16, gap: 8 }}>
+          {contactsQuery.isLoading && <ActivityIndicator color="#1FBF6B" />}
           {contacts.map(contact => (
             <View key={contact.id} style={[styles.contactCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <View style={[styles.contactAvatar, { backgroundColor: "rgba(31,191,107,0.15)" }]}>
@@ -262,13 +398,7 @@ export default function SafetyScreen() {
               </View>
               <TouchableOpacity
                 style={[styles.contactAction, { backgroundColor: "rgba(255,78,98,0.08)", borderColor: "rgba(255,78,98,0.2)" }]}
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  Alert.alert("Remove Contact", `Remove ${contact.name} as a trusted contact?`, [
-                    { text: "Cancel" },
-                    { text: "Remove", style: "destructive", onPress: () => setContacts(prev => prev.filter(c => c.id !== contact.id)) },
-                  ]);
-                }}
+                onPress={() => handleRemoveContact(contact)}
               >
                 <Ionicons name="trash-outline" size={14} color="#FF4E62" />
               </TouchableOpacity>
@@ -282,7 +412,6 @@ export default function SafetyScreen() {
             <Text style={[styles.addContactText, { color: "#1FBF6B" }]}>Add Trusted Contact</Text>
           </TouchableOpacity>
         </View>
-
         {/* Safety Tips */}
         <Text style={[styles.sectionHeader, { color: colors.mutedForeground }]}>SAFETY GUIDELINES</Text>
         <View style={{ paddingHorizontal: 16, gap: 8 }}>
@@ -295,12 +424,11 @@ export default function SafetyScreen() {
             </View>
           ))}
         </View>
-
         {/* Report */}
         <View style={{ paddingHorizontal: 16, marginTop: 8 }}>
           <TouchableOpacity
             style={[styles.reportBtn, { backgroundColor: "rgba(255,78,98,0.06)", borderColor: "rgba(255,78,98,0.2)" }]}
-            onPress={() => Alert.alert("Report an Incident", "Our safety team will contact you within 30 minutes.\n\nEmail: safety@nightmap.app\nHotline: +256 800 100 200")}
+            onPress={() => setShowIncident(true)}
           >
             <Ionicons name="flag-outline" size={18} color="#FF4E62" />
             <View>
@@ -310,8 +438,8 @@ export default function SafetyScreen() {
           </TouchableOpacity>
         </View>
       </ScrollView>
-
-      <AddContactModal visible={showAddContact} onClose={() => setShowAddContact(false)} onAdd={c => setContacts(prev => [...prev, c])} />
+      <AddContactModal visible={showAddContact} onClose={() => setShowAddContact(false)} onAdd={handleAddContact} />
+      <IncidentModal visible={showIncident} onClose={() => setShowIncident(false)} onSubmit={handleIncident} />
     </View>
   );
 }

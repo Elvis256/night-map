@@ -1,8 +1,10 @@
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
-import React, { useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
+  ActivityIndicator,
+  Alert,
   Animated,
   FlatList,
   Platform,
@@ -14,17 +16,23 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { KeyboardAvoidingView } from "react-native-keyboard-controller";
+import {
+  getGetUnreadCountQueryKey,
+  getListConnectionsQueryKey,
+  getListMessagesQueryKey,
+  markConnectionRead,
+  useListMessages,
+} from "@workspace/api-client-react";
 import { useColors } from "@workspace/nightmap-design-system/hooks/use-colors";
-import { Message, useApp } from "@/context/AppContext";
+import { Message, formatClock, useApp } from "@/context/AppContext";
+import { errorMessage } from "@/lib/api";
 
 const WAVEFORM = [8, 14, 22, 18, 28, 12, 20, 26, 16, 10, 24, 18, 14, 22, 8, 20, 26, 12, 18, 16];
 const WAVEFORM_B = [12, 20, 10, 24, 16, 28, 14, 18, 22, 8, 20, 14, 26, 10, 18, 22, 16, 12, 28, 16];
 
 function VoiceBubble({ fromMe, duration, colors }: { fromMe: boolean; duration: string; colors: ReturnType<typeof useColors> }) {
   const [playing, setPlaying] = useState(false);
-  const playAnim = useRef(new Animated.Value(0)).current;
   const progressAnim = useRef(new Animated.Value(0)).current;
-
   const togglePlay = () => {
     setPlaying(!playing);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -35,7 +43,6 @@ function VoiceBubble({ fromMe, duration, colors }: { fromMe: boolean; duration: 
       progressAnim.stopAnimation();
     }
   };
-
   const bars = fromMe ? WAVEFORM : WAVEFORM_B;
   return (
     <View style={[styles.voiceBubble, fromMe ? styles.voiceRight : styles.voiceLeft, {
@@ -68,11 +75,19 @@ function VoiceBubble({ fromMe, duration, colors }: { fromMe: boolean; duration: 
 }
 
 function MessageBubble({ message, colors }: { message: Message; colors: ReturnType<typeof useColors> }) {
-  const time = new Date(message.time);
-  const timeStr = `${time.getHours().toString().padStart(2, "0")}:${time.getMinutes().toString().padStart(2, "0")}`;
-  const isVoice = message.text.startsWith("🎤");
-  const duration = isVoice ? message.text.replace("🎤 ", "").replace("Voice note · ", "") : null;
-
+  const timeStr = formatClock(message.time);
+  if (message.kind === "system") {
+    return (
+      <View style={styles.systemWrap}>
+        <Text style={[styles.systemText, { color: colors.mutedForeground, backgroundColor: colors.card, borderColor: colors.border }]}>
+          {message.text}
+        </Text>
+        <Text style={[styles.timeText, { color: colors.mutedForeground }]}>{timeStr}</Text>
+      </View>
+    );
+  }
+  const isVoice = message.kind === "voice" || message.text.startsWith("🎤");
+  const duration = isVoice ? message.text.replace("🎤 ", "").replace("Voice note · ", "") || "0:07" : null;
   return (
     <View style={[styles.bubbleWrap, message.fromMe ? styles.bubbleRight : styles.bubbleLeft]}>
       {isVoice ? (
@@ -122,44 +137,103 @@ export default function ChatScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const colors = useColors("dark");
   const insets = useSafeAreaInsets();
-  const { matches, messages, sendMessage } = useApp();
+  const { matches, matchesLoading, sendMessage, invalidate, userProfile } = useApp();
   const [input, setInput] = useState("");
   const [isRecording, setIsRecording] = useState(false);
   const [showTip, setShowTip] = useState(false);
+  const [sending, setSending] = useState(false);
+  const recordStart = useRef(0);
   const flatRef = useRef<FlatList>(null);
+  const connectionId = id ?? "";
+  const match = matches.find((m) => m.id === connectionId);
 
-  const match = matches.find((m) => m.id === id);
-  const threadMessages: Message[] = messages[id ?? ""] ?? [];
+  const messagesQuery = useListMessages(connectionId, undefined, {
+    query: { queryKey: getListMessagesQueryKey(connectionId), enabled: !!connectionId, refetchInterval: 3000, staleTime: 1000 },
+  });
+
+  const threadMessages: Message[] = useMemo(
+    () =>
+      (messagesQuery.data ?? []).map((m) => ({
+        id: m.id,
+        matchId: m.connectionId,
+        text: m.text,
+        fromMe: m.fromMe,
+        time: new Date(m.createdAt),
+        kind: m.kind,
+      })),
+    [messagesQuery.data],
+  );
+
+  // Mark incoming messages as read whenever a new one arrives.
+  const unreadIncoming = useMemo(
+    () => (messagesQuery.data ?? []).filter((m) => !m.fromMe && !m.readAt).length,
+    [messagesQuery.data],
+  );
+  useEffect(() => {
+    if (!connectionId || unreadIncoming === 0) return;
+    markConnectionRead(connectionId)
+      .then(() => invalidate([getListConnectionsQueryKey(), getGetUnreadCountQueryKey()]))
+      .catch(() => {});
+  }, [connectionId, unreadIncoming, invalidate]);
+
+  const deliver = async (text: string, kind: "text" | "voice" = "text") => {
+    if (!connectionId || sending) return;
+    setSending(true);
+    try {
+      await sendMessage(connectionId, text, kind);
+    } catch (err) {
+      Alert.alert("Something went wrong", errorMessage(err));
+    } finally {
+      setSending(false);
+    }
+  };
 
   const handleSend = () => {
     const text = input.trim();
-    if (!text || !id) return;
+    if (!text) return;
     setInput("");
-    sendMessage(id, text);
+    void deliver(text);
   };
 
   const handleVoiceStart = () => {
+    recordStart.current = Date.now();
     setIsRecording(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
   };
 
   const handleVoiceEnd = () => {
-    if (!isRecording || !id) { setIsRecording(false); return; }
+    if (!isRecording || !connectionId) { setIsRecording(false); return; }
     setIsRecording(false);
-    const dur = `0:${Math.floor(5 + Math.random() * 18).toString().padStart(2, "0")}`;
-    sendMessage(id, `🎤 Voice note · ${dur}`);
+    const secs = Math.max(1, Math.min(59, Math.round((Date.now() - recordStart.current) / 1000)));
+    const dur = `0:${secs.toString().padStart(2, "0")}`;
+    void deliver(`🎤 Voice note · ${dur}`, "voice");
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   };
 
-  const QUICK_REPLIES = ["Hey, are you free tonight?", "What's your rate?", "Where are you located?", "Send me your location"];
+  const QUICK_REPLIES = userProfile.isCompanion
+    ? ["Hi! Thanks for reaching out 💫", "I'm available from 9pm", "What did you have in mind?", "My rate is listed on my profile"]
+    : ["Hey, are you free tonight?", "What's your rate?", "Where are you located?", "Send me your location"];
 
   if (!match) {
     return (
-      <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
-        <Text style={{ color: colors.foreground, padding: 20 }}>Conversation not found</Text>
+      <View style={[styles.container, { backgroundColor: colors.background, paddingTop: Platform.OS === "web" ? 67 : insets.top }]}>
+        <View style={[styles.chatHeader, { borderBottomColor: colors.border }]}>
+          <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+            <Ionicons name="arrow-back" size={22} color={colors.foreground} />
+          </TouchableOpacity>
+        </View>
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 20 }}>
+          {matchesLoading ? (
+            <ActivityIndicator color={colors.primary} />
+          ) : (
+            <Text style={{ color: colors.foreground }}>Conversation not found</Text>
+          )}
+        </View>
       </View>
     );
   }
+
+  const other = match.companion;
 
   return (
     <KeyboardAvoidingView
@@ -176,14 +250,14 @@ export default function ChatScreen() {
         <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={22} color={colors.foreground} />
         </TouchableOpacity>
-        <View style={[styles.headerAvatar, { backgroundColor: match.companion.color }]}>
-          <Text style={styles.headerAvatarText}>{match.companion.name[0]}</Text>
-          {match.companion.online && <View style={[styles.onlineDot, { borderColor: colors.background }]} />}
+        <View style={[styles.headerAvatar, { backgroundColor: other.color }]}>
+          <Text style={styles.headerAvatarText}>{other.name[0]}</Text>
+          {other.online && <View style={[styles.onlineDot, { borderColor: colors.background }]} />}
         </View>
         <View style={styles.headerInfo}>
-          <Text style={[styles.headerName, { color: colors.foreground }]}>{match.companion.name}</Text>
-          <Text style={[styles.headerStatus, { color: match.companion.online ? "#22c55e" : colors.mutedForeground }]}>
-            {match.companion.online ? "Online now" : "Offline"}
+          <Text style={[styles.headerName, { color: colors.foreground }]}>{other.name}</Text>
+          <Text style={[styles.headerStatus, { color: other.online ? "#22c55e" : colors.mutedForeground }]}>
+            {other.online ? "Online now" : match.status === "pending" ? "Request pending" : "Offline"}
           </Text>
         </View>
         <TouchableOpacity
@@ -193,43 +267,49 @@ export default function ChatScreen() {
           <Ionicons name="cash-outline" size={17} color="#1FBF6B" />
           <Text style={[styles.tipBtnText, { color: "#1FBF6B" }]}>Tip</Text>
         </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.infoBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
-          onPress={() => router.push(`/companion/${match.companion.id}`)}
-        >
-          <Ionicons name="information-circle-outline" size={22} color={colors.foreground} />
-        </TouchableOpacity>
+        {match.isSeekerSide && (
+          <TouchableOpacity
+            style={[styles.infoBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
+            onPress={() => router.push(`/companion/${other.id}`)}
+          >
+            <Ionicons name="information-circle-outline" size={22} color={colors.foreground} />
+          </TouchableOpacity>
+        )}
       </View>
-
       {/* Tip menu */}
       {showTip && (
         <View style={[styles.tipMenu, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <Text style={[styles.tipMenuTitle, { color: colors.foreground }]}>Tips aren’t available yet</Text>
           <Text style={[styles.tipUnavailableText, { color: colors.mutedForeground }]}>
-            No money is sent or recorded from this preview.
+            Tipping will be enabled once a payment provider is connected. No money is sent from here.
           </Text>
         </View>
       )}
-
       {/* Messages */}
       {threadMessages.length === 0 ? (
         <View style={styles.emptyChat}>
-          <View style={[styles.emptyChatAvatar, { backgroundColor: match.companion.color }]}>
-            <Text style={styles.emptyChatInitial}>{match.companion.name[0]}</Text>
-          </View>
-          <Text style={[styles.emptyChatName, { color: colors.foreground }]}>{match.companion.name}</Text>
-          <Text style={[styles.emptyChatHint, { color: colors.mutedForeground }]}>Send a message to start the night</Text>
-          <View style={styles.quickReplies}>
-            {QUICK_REPLIES.map((q) => (
-              <TouchableOpacity
-                key={q}
-                style={[styles.quickReply, { backgroundColor: colors.card, borderColor: colors.border }]}
-                onPress={() => sendMessage(id!, q)}
-              >
-                <Text style={[styles.quickReplyText, { color: colors.foreground }]} numberOfLines={1}>{q}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+          {messagesQuery.isLoading ? (
+            <ActivityIndicator color={colors.primary} />
+          ) : (
+            <>
+              <View style={[styles.emptyChatAvatar, { backgroundColor: other.color }]}>
+                <Text style={styles.emptyChatInitial}>{other.name[0]}</Text>
+              </View>
+              <Text style={[styles.emptyChatName, { color: colors.foreground }]}>{other.name}</Text>
+              <Text style={[styles.emptyChatHint, { color: colors.mutedForeground }]}>Send a message to start the night</Text>
+              <View style={styles.quickReplies}>
+                {QUICK_REPLIES.map((q) => (
+                  <TouchableOpacity
+                    key={q}
+                    style={[styles.quickReply, { backgroundColor: colors.card, borderColor: colors.border }]}
+                    onPress={() => void deliver(q)}
+                  >
+                    <Text style={[styles.quickReplyText, { color: colors.foreground }]} numberOfLines={1}>{q}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </>
+          )}
         </View>
       ) : (
         <FlatList
@@ -244,7 +324,6 @@ export default function ChatScreen() {
           keyboardShouldPersistTaps="handled"
         />
       )}
-
       {/* Input bar */}
       {isRecording ? (
         <RecordingOverlay
@@ -279,9 +358,9 @@ export default function ChatScreen() {
           <TouchableOpacity
             style={[styles.sendBtn, { backgroundColor: input.trim() ? colors.primary : colors.muted }]}
             onPress={handleSend}
-            disabled={!input.trim()}
+            disabled={!input.trim() || sending}
           >
-            <Ionicons name="send" size={17} color={input.trim() ? "#fff" : colors.mutedForeground} />
+            {sending ? <ActivityIndicator size="small" color="#fff" /> : <Ionicons name="send" size={17} color={input.trim() ? "#fff" : colors.mutedForeground} />}
           </TouchableOpacity>
         </View>
       )}
@@ -290,6 +369,11 @@ export default function ChatScreen() {
 }
 
 const styles = StyleSheet.create({
+  systemWrap: { alignItems: "center", marginVertical: 8, gap: 3, paddingHorizontal: 24 },
+  systemText: {
+    fontFamily: "Inter_400Regular", fontSize: 12, textAlign: "center",
+    paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12, borderWidth: 1, overflow: "hidden",
+  },
   container: { flex: 1 },
   chatHeader: {
     flexDirection: "row",

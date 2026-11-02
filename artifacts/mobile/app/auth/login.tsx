@@ -14,12 +14,18 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useApp } from "@/context/AppContext";
+import { errorMessage } from "@/lib/api";
 
 const COUNTRIES = [
   { flag: "🇺🇬", code: "+256", iso: "UG" },
   { flag: "🇰🇪", code: "+254", iso: "KE" },
   { flag: "🇹🇿", code: "+255", iso: "TZ" },
 ];
+
+export function buildPhone(code: string, local: string): string {
+  const digits = local.replace(/\D/g, "").replace(/^0+/, "");
+  return `${code}${digits}`;
+}
 
 function PinDots({ pin }: { pin: string }) {
   return (
@@ -64,16 +70,27 @@ function NumPad({ onPress, onDelete }: { onPress: (d: string) => void; onDelete:
 
 export default function LoginScreen() {
   const insets = useSafeAreaInsets();
-  const { updateProfile } = useApp();
+  const { signIn } = useApp();
   const [countryIdx, setCountryIdx] = useState(0);
   const [phone, setPhone] = useState("");
   const [pin, setPin] = useState("");
   const [step, setStep] = useState<"phone" | "pin">("phone");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const shake = new Animated.Value(0);
+  const shake = useState(() => new Animated.Value(0))[0];
 
   const country = COUNTRIES[countryIdx];
+
+  React.useEffect(() => {
+    AsyncStorage.getItem("lastPhone").then((stored) => {
+      if (!stored) return;
+      const idx = COUNTRIES.findIndex((c) => stored.startsWith(c.code));
+      if (idx >= 0) {
+        setCountryIdx(idx);
+        setPhone(stored.slice(COUNTRIES[idx].code.length));
+      }
+    }).catch(() => {});
+  }, []);
 
   const doShake = () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
@@ -93,28 +110,30 @@ export default function LoginScreen() {
   };
 
   const handlePinDigit = (d: string) => {
-    if (pin.length >= 4) return;
+    if (pin.length >= 4 || loading) return;
     const next = pin + d;
     setPin(next);
     if (next.length === 4) {
-      setTimeout(() => handleLogin(next), 200);
+      setTimeout(() => handleLogin(next), 150);
     }
   };
 
   const handleLogin = async (finalPin: string) => {
     setLoading(true);
-    await new Promise(r => setTimeout(r, 800));
-    const storedPin = await AsyncStorage.getItem("userPin");
-    if (storedPin && storedPin !== finalPin) {
+    setError("");
+    const fullPhone = buildPhone(country.code, phone);
+    try {
+      await signIn(fullPhone, finalPin);
+      await AsyncStorage.setItem("lastPhone", fullPhone);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      router.replace("/(tabs)");
+    } catch (err) {
       setPin("");
-      setError("Incorrect PIN. Try again.");
+      setError(errorMessage(err, "Could not sign in. Try again."));
       doShake();
+    } finally {
       setLoading(false);
-      return;
     }
-    await AsyncStorage.setItem("authToken", `nm_${Date.now()}`);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    router.replace("/(tabs)");
   };
 
   return (
@@ -152,6 +171,7 @@ export default function LoginScreen() {
               onChangeText={v => { setPhone(v); setError(""); }}
               maxLength={12}
               autoFocus
+              onSubmitEditing={handlePhoneContinue}
             />
           </View>
 
@@ -184,7 +204,7 @@ export default function LoginScreen() {
           />
 
           <TouchableOpacity style={styles.forgotBtn} onPress={() => router.push("/auth/register")}>
-            <Text style={styles.forgotBtnText}>Forgot PIN? Re-register</Text>
+            <Text style={styles.forgotBtnText}>Forgot PIN? Contact support to reset</Text>
           </TouchableOpacity>
         </View>
       )}

@@ -4,37 +4,46 @@ import { router } from "expo-router";
 import * as Location from "expo-location";
 import React, { useEffect, useRef, useState } from "react";
 import {
+  ActivityIndicator,
+  Alert,
   Animated,
+  Modal,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import {
+  createLounge,
+  endLounge,
+  getListLoungesQueryKey,
+  getListStreamsQueryKey,
+  joinLounge,
+  leaveLounge,
+  useListLounges,
+  useListStreams,
+  type Lounge,
+  type Stream,
+} from "@workspace/api-client-react";
 import { useColors } from "@workspace/nightmap-design-system/hooks/use-colors";
-import { useApp, COMPANIONS } from "@/context/AppContext";
+import { useApp } from "@/context/AppContext";
+import { CITY_COORDS, nearestCity } from "@/hooks/useLocationCity";
+import { errorMessage } from "@/lib/api";
 
-const CITY_COORDS: Record<string, { lat: number; lng: number }> = {
-  Kampala:         { lat:  0.3476, lng: 32.5825 },
-  Entebbe:         { lat:  0.0512, lng: 32.4637 },
-  Mbarara:         { lat: -0.6073, lng: 30.6573 },
-  Gulu:            { lat:  2.7748, lng: 32.2991 },
-  Jinja:           { lat:  0.4478, lng: 33.2026 },
-  Nairobi:         { lat: -1.2921, lng: 36.8219 },
-  "Dar es Salaam": { lat: -6.7924, lng: 39.2083 },
-  Dubai:           { lat: 25.2048, lng: 55.2708 },
+const CITY_FLAG: Record<string, string> = {
+  Kampala: "🇺🇬", Entebbe: "🇺🇬", Mbarara: "🇺🇬", Gulu: "🇺🇬", Jinja: "🇺🇬",
+  Nairobi: "🇰🇪", "Dar es Salaam": "🇹🇿", Dubai: "🇦🇪",
 };
+const CITIES = Object.keys(CITY_COORDS);
 
-const CITY_REGION: Record<string, string> = {
-  Kampala: "Uganda", Entebbe: "Uganda", Mbarara: "Uganda",
-  Gulu: "Uganda", Jinja: "Uganda",
-  Nairobi: "Kenya",
-  "Dar es Salaam": "Tanzania",
-  Dubai: "International",
-  "All Cities": "All Cities",
-};
+function cityLabel(city: string): string {
+  return CITY_FLAG[city] ? `${city} ${CITY_FLAG[city]}` : city;
+}
 
 function haversineDist(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371;
@@ -45,127 +54,9 @@ function haversineDist(lat1: number, lng1: number, lat2: number, lng2: number): 
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-function nearestCity(lat: number, lng: number): string {
-  let best = "Kampala";
-  let bestDist = Infinity;
-  for (const [city, coords] of Object.entries(CITY_COORDS)) {
-    const dist = haversineDist(lat, lng, coords.lat, coords.lng);
-    if (dist < bestDist) { bestDist = dist; best = city; }
-  }
-  return best;
-}
-
 function cityCoord(city: string): { lat: number; lng: number } {
   return CITY_COORDS[city] ?? CITY_COORDS["Kampala"];
 }
-
-const LOUNGES = [
-  {
-    id: "kla1",
-    name: "Kampala After Dark",
-    city: "Kampala",
-    cityLabel: "Kampala 🇺🇬",
-    topic: "Weekend Vibes",
-    desc: "Talking best spots, tonight's deals, and meet-up plans",
-    listeners: 47,
-    isLive: true,
-    isFeatured: true,
-    color: "#FF4E62",
-    hostInitials: ["D", "A", "Z"],
-    hostColors: ["#7A3CFF", "#FF4E62", "#1FBF6B"],
-  },
-  {
-    id: "nbi1",
-    name: "Nairobi Nights",
-    city: "Nairobi",
-    cityLabel: "Nairobi 🇰🇪",
-    topic: "Travel & Meet",
-    desc: "City connections, hidden gems, and travel companion stories",
-    listeners: 31,
-    isLive: true,
-    isFeatured: false,
-    color: "#3DA9FF",
-    hostInitials: ["N", "F"],
-    hostColors: ["#FF8A3D", "#7A3CFF"],
-  },
-  {
-    id: "dar1",
-    name: "Dar Beach Vibes",
-    city: "Dar es Salaam",
-    cityLabel: "Dar es Salaam 🇹🇿",
-    topic: "Coastal Evenings",
-    desc: "Beach nights, ocean dining, and East African coast culture",
-    listeners: 22,
-    isLive: true,
-    isFeatured: false,
-    color: "#1FBF6B",
-    hostInitials: ["L", "P"],
-    hostColors: ["#FF4E62", "#3DA9FF"],
-  },
-  {
-    id: "mba1",
-    name: "Mbarara Chill",
-    city: "Mbarara",
-    cityLabel: "Mbarara 🇺🇬",
-    topic: "Southwestern Evenings",
-    desc: "Laid-back connections, local spots, and weekend plans",
-    listeners: 15,
-    isLive: true,
-    isFeatured: false,
-    color: "#FF8A3D",
-    hostInitials: ["T", "B"],
-    hostColors: ["#FF4E62", "#1FBF6B"],
-  },
-  {
-    id: "match1",
-    name: "Matchmaker's Corner",
-    city: "All Cities",
-    cityLabel: "All Cities",
-    topic: "Introductions & Stories",
-    desc: "Real connection stories, tips for first meetings, and date ideas",
-    listeners: 68,
-    isLive: true,
-    isFeatured: false,
-    color: "#FF8A3D",
-    hostInitials: ["A", "Z", "N", "F"],
-    hostColors: ["#7A3CFF", "#FF4E62", "#1FBF6B", "#3DA9FF"],
-  },
-  {
-    id: "travel1",
-    name: "Dubai Connections",
-    city: "Dubai",
-    cityLabel: "Dubai 🇦🇪",
-    topic: "EA Diaspora Meetups",
-    desc: "East Africans in Dubai — experiences, travel companions, city guide",
-    listeners: 19,
-    isLive: false,
-    isFeatured: false,
-    color: "#7A3CFF",
-    hostInitials: ["Z", "L"],
-    hostColors: ["#FF8A3D", "#FF4E62"],
-  },
-  {
-    id: "safe1",
-    name: "Safety Circle",
-    city: "All Cities",
-    cityLabel: "All Cities",
-    topic: "Community Safety Talk",
-    desc: "Best practices, trusted venues, vetting tips — a safe space",
-    listeners: 14,
-    isLive: false,
-    isFeatured: false,
-    color: "#22c55e",
-    hostInitials: ["A"],
-    hostColors: ["#1FBF6B"],
-  },
-];
-
-const LIVE_STREAMERS = [
-  { companionId: "1", title: "Morning yoga & chat ☀️", viewers: 234, ppv: 0, isPremium: false },
-  { companionId: "3", title: "Get ready with me 💄", viewers: 189, ppv: 5000, isPremium: true },
-  { companionId: "5", title: "Club night preparations 🎶", viewers: 312, ppv: 0, isPremium: false },
-  { companionId: "2", title: "Q&A — ask me anything ✨", viewers: 97, ppv: 3000, isPremium: true },
-];
 
 function PulsingDot({ color }: { color: string }) {
   const pulse = useRef(new Animated.Value(1)).current;
@@ -188,6 +79,15 @@ function PulsingDot({ color }: { color: string }) {
 }
 
 function ListenerAvatars({ initials, colors: avatarColors }: { initials: string[]; colors: string[] }) {
+  if (initials.length === 0) {
+    return (
+      <View style={styles.avatarStack}>
+        <View style={[styles.listenerAvatar, { backgroundColor: "rgba(170,179,197,0.2)" }]}>
+          <Ionicons name="headset-outline" size={11} color="#AAB3C5" />
+        </View>
+      </View>
+    );
+  }
   return (
     <View style={styles.avatarStack}>
       {initials.slice(0, 4).map((init, i) => (
@@ -210,8 +110,6 @@ function ListenerAvatars({ initials, colors: avatarColors }: { initials: string[
   );
 }
 
-type Lounge = typeof LOUNGES[number];
-
 function FeaturedLounge({ lounge, onJoin, isNearby }: { lounge: Lounge; onJoin: () => void; isNearby: boolean }) {
   const colors = useColors("dark");
   return (
@@ -224,7 +122,7 @@ function FeaturedLounge({ lounge, onJoin, isNearby }: { lounge: Lounge; onJoin: 
             <Text style={[styles.livePillText, { color: lounge.color }]}>LIVE</Text>
           </View>
           <View style={[styles.cityPill, { backgroundColor: colors.muted }]}>
-            <Text style={[styles.cityPillText, { color: colors.mutedForeground }]}>{lounge.cityLabel}</Text>
+            <Text style={[styles.cityPillText, { color: colors.mutedForeground }]}>{cityLabel(lounge.city)}</Text>
           </View>
           {isNearby && (
             <View style={[styles.nearbyPill, { backgroundColor: "rgba(31,191,107,0.15)", borderColor: "rgba(31,191,107,0.4)" }]}>
@@ -235,22 +133,22 @@ function FeaturedLounge({ lounge, onJoin, isNearby }: { lounge: Lounge; onJoin: 
         </View>
         <View style={[styles.featuredListeners, { backgroundColor: "rgba(0,0,0,0.4)" }]}>
           <Ionicons name="headset" size={12} color={colors.mutedForeground} />
-          <Text style={[styles.featuredListenersText, { color: colors.mutedForeground }]}>{lounge.listeners}</Text>
+          <Text style={[styles.featuredListenersText, { color: colors.mutedForeground }]}>{lounge.listenerCount}</Text>
         </View>
       </View>
-
       <Text style={[styles.featuredName, { color: colors.foreground }]}>{lounge.name}</Text>
       <Text style={[styles.featuredTopic, { color: lounge.color }]}>🎙 {lounge.topic}</Text>
-      <Text style={[styles.featuredDesc, { color: colors.mutedForeground }]}>{lounge.desc}</Text>
-
+      <Text style={[styles.featuredDesc, { color: colors.mutedForeground }]}>{lounge.description}</Text>
       <View style={styles.featuredBottom}>
         <View style={styles.featuredLeft}>
-          <ListenerAvatars initials={lounge.hostInitials} colors={lounge.hostColors} />
-          <Text style={[styles.featuredWith, { color: colors.mutedForeground }]}>with {lounge.listeners} listening</Text>
+          <ListenerAvatars initials={lounge.participants.map(p => p.initial)} colors={lounge.participants.map(p => p.color)} />
+          <Text style={[styles.featuredWith, { color: colors.mutedForeground }]}>
+            {lounge.listenerCount > 0 ? `${lounge.listenerCount} listening` : "Be the first to join"}
+          </Text>
         </View>
-        <TouchableOpacity style={[styles.joinBtn, { backgroundColor: lounge.color }]} onPress={onJoin}>
-          <Ionicons name="mic" size={14} color="#fff" />
-          <Text style={styles.joinBtnText}>Join Live</Text>
+        <TouchableOpacity style={[styles.joinBtn, { backgroundColor: lounge.joined ? colors.muted : lounge.color }]} onPress={onJoin}>
+          <Ionicons name={lounge.joined ? "exit-outline" : "mic"} size={14} color="#fff" />
+          <Text style={styles.joinBtnText}>{lounge.joined ? "Leave" : "Join Live"}</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -279,9 +177,9 @@ function LoungeRow({ lounge, onJoin, isNearby }: { lounge: Lounge; onJoin: () =>
         </View>
         <Text style={[styles.loungeTopic, { color: colors.accent }]}>🎙 {lounge.topic}</Text>
         <View style={styles.loungeMetaRow}>
-          <ListenerAvatars initials={lounge.hostInitials} colors={lounge.hostColors} />
+          <ListenerAvatars initials={lounge.participants.map(p => p.initial)} colors={lounge.participants.map(p => p.color)} />
           <Text style={[styles.loungeListeners, { color: colors.mutedForeground }]}>
-            {lounge.listeners} listening · {lounge.cityLabel}
+            {lounge.listenerCount} listening · {cityLabel(lounge.city)}
           </Text>
         </View>
       </View>
@@ -289,25 +187,23 @@ function LoungeRow({ lounge, onJoin, isNearby }: { lounge: Lounge; onJoin: () =>
         style={[
           styles.joinSmall,
           {
-            backgroundColor: lounge.isLive ? `${lounge.color}18` : colors.muted,
+            backgroundColor: lounge.joined ? colors.muted : lounge.isLive ? `${lounge.color}18` : colors.muted,
             borderColor: lounge.isLive ? `${lounge.color}50` : colors.border,
           },
         ]}
         onPress={onJoin}
       >
-        <Ionicons name={lounge.isLive ? "mic" : "notifications-outline"} size={14} color={lounge.isLive ? lounge.color : colors.mutedForeground} />
+        <Ionicons name={lounge.joined ? "exit-outline" : lounge.isLive ? "mic" : "notifications-outline"} size={14} color={lounge.isLive ? lounge.color : colors.mutedForeground} />
         <Text style={[styles.joinSmallText, { color: lounge.isLive ? lounge.color : colors.mutedForeground }]}>
-          {lounge.isLive ? "Join" : "Remind"}
+          {lounge.joined ? "Leave" : lounge.isLive ? "Join" : "Remind"}
         </Text>
       </TouchableOpacity>
     </View>
   );
 }
 
-function LiveStreamerCard({ streamer, onWatch }: { streamer: typeof LIVE_STREAMERS[number]; onWatch: () => void }) {
+function LiveStreamerCard({ stream, onWatch }: { stream: Stream; onWatch: () => void }) {
   const colors = useColors("dark");
-  const companion = COMPANIONS.find(c => c.id === streamer.companionId);
-  if (!companion) return null;
   const pulse = useRef(new Animated.Value(1)).current;
   useEffect(() => {
     const loop = Animated.loop(
@@ -319,54 +215,112 @@ function LiveStreamerCard({ streamer, onWatch }: { streamer: typeof LIVE_STREAME
     loop.start();
     return () => loop.stop();
   }, []);
-
+  const host = stream.host;
   return (
-    <TouchableOpacity style={[styles.streamerCard, { backgroundColor: colors.card, borderColor: `${companion.color}60` }]} onPress={onWatch} activeOpacity={0.85}>
-      <Animated.View style={[styles.streamerAvatar, { backgroundColor: companion.color, borderColor: "#FF4E62", transform: [{ scale: pulse }] }]}>
-        <Text style={styles.streamerInitial}>{companion.name[0]}</Text>
+    <TouchableOpacity style={[styles.streamerCard, { backgroundColor: colors.card, borderColor: `${host.avatarColor}60` }]} onPress={onWatch} activeOpacity={0.85}>
+      <Animated.View style={[styles.streamerAvatar, { backgroundColor: host.avatarColor, borderColor: "#FF4E62", transform: [{ scale: pulse }] }]}>
+        <Text style={styles.streamerInitial}>{host.name[0]}</Text>
         <View style={styles.streamerLiveBadge}>
           <Text style={styles.streamerLiveBadgeText}>LIVE</Text>
         </View>
       </Animated.View>
       <View style={{ flex: 1, gap: 3 }}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-          <Text style={[styles.streamerName, { color: colors.foreground }]}>{companion.name}</Text>
-          {companion.verified && <Ionicons name="checkmark-circle" size={13} color="#3DA9FF" />}
-          {streamer.isPremium && (
-            <View style={[styles.ppvBadge, { backgroundColor: "rgba(255,138,61,0.15)", borderColor: "rgba(255,138,61,0.4)" }]}>
-              <Text style={[styles.ppvBadgeText, { color: "#FF8A3D" }]}>PPV</Text>
+          <Text style={[styles.streamerName, { color: colors.foreground }]}>{host.name}</Text>
+          {host.verified && <Ionicons name="checkmark-circle" size={13} color="#3DA9FF" />}
+          {stream.isHost && (
+            <View style={[styles.ppvBadge, { backgroundColor: "rgba(255,78,98,0.15)", borderColor: "rgba(255,78,98,0.4)" }]}>
+              <Text style={[styles.ppvBadgeText, { color: "#FF4E62" }]}>YOU</Text>
             </View>
           )}
         </View>
-        <Text style={[styles.streamerTitle, { color: colors.mutedForeground }]} numberOfLines={1}>{streamer.title}</Text>
+        <Text style={[styles.streamerTitle, { color: colors.mutedForeground }]} numberOfLines={1}>{stream.title}</Text>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
             <Ionicons name="eye" size={12} color={colors.mutedForeground} />
-            <Text style={[styles.streamerMeta, { color: colors.mutedForeground }]}>{streamer.viewers.toLocaleString()}</Text>
+            <Text style={[styles.streamerMeta, { color: colors.mutedForeground }]}>{stream.viewerCount.toLocaleString()}</Text>
           </View>
           <Text style={[styles.streamerMeta, { color: colors.mutedForeground }]}>·</Text>
-          <Text style={[styles.streamerMeta, { color: colors.mutedForeground }]}>{companion.city}</Text>
+          <Text style={[styles.streamerMeta, { color: colors.mutedForeground }]}>{host.city}</Text>
         </View>
       </View>
       <TouchableOpacity
-        style={[styles.watchBtn, { backgroundColor: streamer.ppv > 0 ? "rgba(255,138,61,0.15)" : "rgba(255,78,98,0.15)", borderColor: streamer.ppv > 0 ? "rgba(255,138,61,0.5)" : "rgba(255,78,98,0.5)" }]}
+        style={[styles.watchBtn, { backgroundColor: "rgba(255,78,98,0.15)", borderColor: "rgba(255,78,98,0.5)" }]}
         onPress={onWatch}
       >
-        <Ionicons name="play" size={12} color={streamer.ppv > 0 ? "#FF8A3D" : "#FF4E62"} />
-        <Text style={[styles.watchBtnText, { color: streamer.ppv > 0 ? "#FF8A3D" : "#FF4E62" }]}>
-          {streamer.ppv > 0 ? `${(streamer.ppv / 1000).toFixed(0)}k` : "Watch"}
-        </Text>
+        <Ionicons name="play" size={12} color="#FF4E62" />
+        <Text style={[styles.watchBtnText, { color: "#FF4E62" }]}>Watch</Text>
       </TouchableOpacity>
     </TouchableOpacity>
+  );
+}
+
+function CreateLoungeModal({ visible, defaultCity, onClose, onCreated }: { visible: boolean; defaultCity: string; onClose: () => void; onCreated: (lounge: Lounge) => void }) {
+  const colors = useColors("dark");
+  const insets = useSafeAreaInsets();
+  const [name, setName] = useState("");
+  const [topic, setTopic] = useState("");
+  const [description, setDescription] = useState("");
+  const [city, setCity] = useState(defaultCity || "Kampala");
+  const [saving, setSaving] = useState(false);
+  useEffect(() => { if (defaultCity) setCity(defaultCity); }, [defaultCity]);
+  const canSave = name.trim().length > 0 && topic.trim().length > 0 && !saving;
+  const handleCreate = async () => {
+    if (!canSave) return;
+    setSaving(true);
+    try {
+      const lounge = await createLounge({ name: name.trim(), topic: topic.trim(), description: description.trim() || undefined, city });
+      setName(""); setTopic(""); setDescription("");
+      onCreated(lounge);
+    } catch (err) {
+      Alert.alert("Could not start lounge", errorMessage(err));
+    } finally {
+      setSaving(false);
+    }
+  };
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <Pressable style={styles.modalBackdrop} onPress={onClose}>
+        <Pressable style={[styles.modalSheet, { backgroundColor: colors.card, borderColor: colors.border, paddingBottom: insets.bottom + 16 }]}>
+          <View style={[styles.modalHandle, { backgroundColor: colors.border }]} />
+          <Text style={[styles.modalTitle, { color: colors.foreground }]}>Start Your Own Lounge</Text>
+          <Text style={[styles.modalSub, { color: colors.mutedForeground }]}>City-based · Anonymous · Up to 50 listeners</Text>
+          <TextInput style={[styles.modalInput, { backgroundColor: colors.muted, borderColor: colors.border, color: colors.foreground }]} placeholder="Lounge name" placeholderTextColor={colors.mutedForeground} value={name} onChangeText={setName} maxLength={60} />
+          <TextInput style={[styles.modalInput, { backgroundColor: colors.muted, borderColor: colors.border, color: colors.foreground }]} placeholder="Topic (e.g. Weekend Vibes)" placeholderTextColor={colors.mutedForeground} value={topic} onChangeText={setTopic} maxLength={60} />
+          <TextInput style={[styles.modalInput, { backgroundColor: colors.muted, borderColor: colors.border, color: colors.foreground, minHeight: 60 }]} placeholder="What will you talk about? (optional)" placeholderTextColor={colors.mutedForeground} value={description} onChangeText={setDescription} maxLength={200} multiline />
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 4 }}>
+            {[...CITIES, "All Cities"].map((c) => (
+              <TouchableOpacity key={c} style={[styles.cityChip, { backgroundColor: city === c ? "rgba(122,60,255,0.15)" : colors.muted, borderColor: city === c ? "#7A3CFF" : colors.border }]} onPress={() => setCity(c)}>
+                <Text style={[styles.cityChipText, { color: city === c ? "#7A3CFF" : colors.mutedForeground }]}>{cityLabel(c)}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+          <TouchableOpacity style={[styles.modalBtn, { backgroundColor: canSave ? "#7A3CFF" : colors.muted }]} onPress={handleCreate} disabled={!canSave}>
+            {saving ? <ActivityIndicator color="#fff" /> : <Text style={[styles.modalBtnText, { color: canSave ? "#fff" : colors.mutedForeground }]}>Go live in the lounge</Text>}
+          </TouchableOpacity>
+        </Pressable>
+      </Pressable>
+    </Modal>
   );
 }
 
 export default function RadioScreen() {
   const colors = useColors("dark");
   const insets = useSafeAreaInsets();
-  const { userCity, setUserCity } = useApp();
+  const { userCity, setUserCity, invalidate, userProfile } = useApp();
   const [joined, setJoined] = useState<string | null>(null);
   const [detectedCity, setDetectedCity] = useState<string>(userCity || "");
+  const [showCreate, setShowCreate] = useState(false);
+
+  const loungesQuery = useListLounges({ query: { queryKey: getListLoungesQueryKey(), refetchInterval: 15000 } });
+  const streamsQuery = useListStreams({ query: { queryKey: getListStreamsQueryKey(), refetchInterval: 15000 } });
+  const lounges: Lounge[] = loungesQuery.data ?? [];
+  const streams: Stream[] = streamsQuery.data ?? [];
+
+  useEffect(() => {
+    const serverJoined = lounges.find((l) => l.joined);
+    if (serverJoined && !joined) setJoined(serverJoined.id);
+  }, [lounges, joined]);
 
   useEffect(() => {
     if (userCity) {
@@ -389,7 +343,17 @@ export default function RadioScreen() {
     return () => { cancelled = true; };
   }, [userCity]);
 
-  const sortedLounges = [...LOUNGES].sort((a, b) => {
+  // Presence heartbeat while in a lounge; leave when the screen unmounts.
+  useEffect(() => {
+    if (!joined) return;
+    const id = setInterval(() => joinLounge(joined).catch(() => {}), 60000);
+    return () => {
+      clearInterval(id);
+      leaveLounge(joined).catch(() => {});
+    };
+  }, [joined]);
+
+  const sortedLounges = [...lounges].sort((a, b) => {
     if (!detectedCity) return 0;
     const userCoord = cityCoord(detectedCity);
     const cityA = a.city === "All Cities" ? detectedCity : a.city;
@@ -400,31 +364,52 @@ export default function RadioScreen() {
     const distB = haversineDist(userCoord.lat, userCoord.lng, coordB.lat, coordB.lng);
     return distA - distB;
   });
-
   const NEARBY_THRESHOLD_KM = 200;
   const userCoord = detectedCity ? cityCoord(detectedCity) : null;
-
   function isNearby(lounge: Lounge): boolean {
     if (!userCoord || lounge.city === "All Cities") return false;
     const coord = cityCoord(lounge.city);
     return haversineDist(userCoord.lat, userCoord.lng, coord.lat, coord.lng) < NEARBY_THRESHOLD_KM;
   }
-
   const nearbyLounges = sortedLounges.filter(l => l.city !== "All Cities" && isNearby(l));
   const otherLounges = sortedLounges.filter(l => !isNearby(l));
   const featured = nearbyLounges[0] ?? sortedLounges[0];
+  const joinedLounge = lounges.find((l) => l.id === joined) ?? null;
 
-  const handleJoin = (id: string) => {
+  const handleJoin = async (lounge: Lounge) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setJoined(id);
+    try {
+      if (joined === lounge.id) {
+        setJoined(null);
+        await leaveLounge(lounge.id);
+      } else {
+        if (joined) await leaveLounge(joined).catch(() => {});
+        setJoined(lounge.id);
+        await joinLounge(lounge.id);
+      }
+      invalidate([getListLoungesQueryKey()]);
+    } catch (err) {
+      Alert.alert("Lounge unavailable", errorMessage(err));
+      setJoined(null);
+    }
   };
 
-  const handleWatch = (companionId: string) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    router.push({ pathname: "/live", params: { mode: "watch", companionId } });
+  const handleEnd = async (lounge: Lounge) => {
+    try {
+      await endLounge(lounge.id);
+      setJoined(null);
+      invalidate([getListLoungesQueryKey()]);
+    } catch (err) {
+      Alert.alert("Could not end lounge", errorMessage(err));
+    }
   };
 
-  const totalListeners = LOUNGES.filter(l => l.isLive).reduce((s, l) => s + l.listeners, 0);
+  const handleWatch = (stream: Stream) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    router.push({ pathname: "/live", params: { mode: "watch", streamId: stream.id } });
+  };
+
+  const totalListeners = lounges.filter(l => l.isLive).reduce((s, l) => s + l.listenerCount, 0);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -445,19 +430,22 @@ export default function RadioScreen() {
           </Text>
         </View>
       </View>
-
-      {joined && (
-        <View style={[styles.nowPlaying, { backgroundColor: `${LOUNGES.find(l => l.id === joined)?.color ?? "#FF4E62"}18`, borderColor: `${LOUNGES.find(l => l.id === joined)?.color ?? "#FF4E62"}40` }]}>
-          <Ionicons name="radio" size={16} color={LOUNGES.find(l => l.id === joined)?.color ?? "#FF4E62"} />
-          <Text style={[styles.nowPlayingText, { color: LOUNGES.find(l => l.id === joined)?.color ?? "#FF4E62" }]}>
-            Now in: {LOUNGES.find(l => l.id === joined)?.name}
+      {joinedLounge && (
+        <View style={[styles.nowPlaying, { backgroundColor: `${joinedLounge.color}18`, borderColor: `${joinedLounge.color}40` }]}>
+          <Ionicons name="radio" size={16} color={joinedLounge.color} />
+          <Text style={[styles.nowPlayingText, { color: joinedLounge.color }]} numberOfLines={1}>
+            Now in: {joinedLounge.name}
           </Text>
-          <TouchableOpacity onPress={() => setJoined(null)} style={styles.leaveBtn}>
+          {joinedLounge.isHost && (
+            <TouchableOpacity onPress={() => handleEnd(joinedLounge)} style={styles.leaveBtn}>
+              <Text style={[styles.leaveBtnText, { color: "#FF4E62" }]}>End</Text>
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity onPress={() => handleJoin(joinedLounge)} style={styles.leaveBtn}>
             <Text style={[styles.leaveBtnText, { color: colors.mutedForeground }]}>Leave</Text>
           </TouchableOpacity>
         </View>
       )}
-
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[styles.scroll, { paddingBottom: Platform.OS === "web" ? 34 : insets.bottom + 20 }]}
@@ -468,18 +456,26 @@ export default function RadioScreen() {
             <PulsingDot color="#FF4E62" />
             <Text style={[styles.sectionLabel, { color: colors.foreground, marginTop: 0, marginBottom: 0 }]}>LIVE STREAMS</Text>
           </View>
-          <TouchableOpacity onPress={() => router.push({ pathname: "/live", params: { mode: "browse" } })}>
-            <Text style={[styles.seeAll, { color: colors.primary }]}>See all</Text>
+          <TouchableOpacity onPress={() => router.push({ pathname: "/live", params: { mode: userProfile.isCompanion ? "broadcast" : "browse" } })}>
+            <Text style={[styles.seeAll, { color: colors.primary }]}>{userProfile.isCompanion ? "Go live" : "See all"}</Text>
           </TouchableOpacity>
         </View>
         <View style={styles.streamersList}>
-          {LIVE_STREAMERS.map(s => (
-            <LiveStreamerCard key={s.companionId} streamer={s} onWatch={() => handleWatch(s.companionId)} />
-          ))}
+          {streams.length === 0 ? (
+            <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
+              {streamsQuery.isLoading ? "Loading streams…" : "Nobody is streaming right now. Companions usually go live after 8pm."}
+            </Text>
+          ) : (
+            streams.map(s => (
+              <LiveStreamerCard key={s.id} stream={s} onWatch={() => handleWatch(s)} />
+            ))
+          )}
         </View>
-
         {/* ── NEARBY LOUNGES ───────────────────────────── */}
-        {nearbyLounges.length > 0 && (
+        {loungesQuery.isLoading && lounges.length === 0 && (
+          <ActivityIndicator color={colors.primary} style={{ marginVertical: 24 }} />
+        )}
+        {nearbyLounges.length > 0 && featured && (
           <>
             <View style={styles.sectionRow}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
@@ -488,15 +484,14 @@ export default function RadioScreen() {
               </View>
               <Text style={[styles.sectionSub, { color: colors.mutedForeground }]}>{detectedCity}</Text>
             </View>
-            <FeaturedLounge lounge={featured} onJoin={() => handleJoin(featured.id)} isNearby={true} />
+            <FeaturedLounge lounge={featured} onJoin={() => handleJoin(featured)} isNearby={true} />
             {nearbyLounges.slice(1).map(lounge => (
-              <LoungeRow key={lounge.id} lounge={lounge} onJoin={() => handleJoin(lounge.id)} isNearby={true} />
+              <LoungeRow key={lounge.id} lounge={lounge} onJoin={() => handleJoin(lounge)} isNearby={true} />
             ))}
           </>
         )}
-
         {/* ── OTHER CITIES ─────────────────────────────── */}
-        {otherLounges.length > 0 && (
+        {otherLounges.length > 0 && featured && (
           <>
             <View style={styles.sectionRow}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
@@ -507,28 +502,52 @@ export default function RadioScreen() {
               </View>
             </View>
             {nearbyLounges.length === 0 && (
-              <FeaturedLounge lounge={featured} onJoin={() => handleJoin(featured.id)} isNearby={false} />
+              <FeaturedLounge lounge={featured} onJoin={() => handleJoin(featured)} isNearby={false} />
             )}
-            {(nearbyLounges.length > 0 ? otherLounges : otherLounges.slice(1)).map(lounge => (
-              <LoungeRow key={lounge.id} lounge={lounge} onJoin={() => handleJoin(lounge.id)} isNearby={false} />
+            {(nearbyLounges.length > 0 ? otherLounges : otherLounges.filter(l => l.id !== featured.id)).map(lounge => (
+              <LoungeRow key={lounge.id} lounge={lounge} onJoin={() => handleJoin(lounge)} isNearby={false} />
             ))}
           </>
         )}
-
         {/* ── START YOUR OWN LOUNGE ────────────────────── */}
-        <View style={[styles.createCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <TouchableOpacity style={[styles.createCard, { backgroundColor: colors.card, borderColor: colors.border }]} onPress={() => setShowCreate(true)} activeOpacity={0.8}>
           <Ionicons name="add-circle-outline" size={28} color={colors.mutedForeground} />
           <View style={{ flex: 1 }}>
             <Text style={[styles.createTitle, { color: colors.foreground }]}>Start Your Own Lounge</Text>
             <Text style={[styles.createSub, { color: colors.mutedForeground }]}>City-based · Anonymous · Up to 50 listeners</Text>
           </View>
-        </View>
+          <Ionicons name="chevron-forward" size={16} color={colors.mutedForeground} />
+        </TouchableOpacity>
+        <Text style={[styles.emptyText, { color: colors.mutedForeground, marginTop: 12 }]}>
+          Lounge audio is not connected yet. Presence, hosting and listener counts are live.
+        </Text>
       </ScrollView>
+      <CreateLoungeModal
+        visible={showCreate}
+        defaultCity={detectedCity}
+        onClose={() => setShowCreate(false)}
+        onCreated={(lounge) => {
+          setShowCreate(false);
+          setJoined(lounge.id);
+          invalidate([getListLoungesQueryKey()]);
+        }}
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  emptyText: { fontFamily: "Inter_400Regular", fontSize: 12, textAlign: "center", paddingHorizontal: 16, paddingVertical: 8 },
+  modalBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "flex-end" },
+  modalSheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, borderWidth: 1, padding: 20, gap: 12 },
+  modalHandle: { width: 40, height: 4, borderRadius: 2, alignSelf: "center", marginBottom: 4 },
+  modalTitle: { fontFamily: "Inter_700Bold", fontSize: 18 },
+  modalSub: { fontFamily: "Inter_400Regular", fontSize: 13, marginTop: -8 },
+  modalInput: { borderRadius: 12, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 12, fontFamily: "Inter_400Regular", fontSize: 14 },
+  cityChip: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 14, borderWidth: 1 },
+  cityChipText: { fontFamily: "Inter_600SemiBold", fontSize: 12 },
+  modalBtn: { borderRadius: 14, paddingVertical: 14, alignItems: "center", marginTop: 4 },
+  modalBtnText: { fontFamily: "Inter_700Bold", fontSize: 15 },
   container: { flex: 1 },
   header: {
     flexDirection: "row",

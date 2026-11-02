@@ -3,8 +3,7 @@ import {
 } from "@workspace/nightmap-design-system/hooks/use-fonts";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Stack, router } from "expo-router";
-import { Platform } from "react-native";
+import { Stack, router, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -12,24 +11,36 @@ import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { AppProvider } from "@/context/AppContext";
+import { AppProvider, useApp } from "@/context/AppContext";
+import { ONBOARDED_KEY, configureApi, isUnauthorized } from "@/lib/api";
 
+configureApi();
 SplashScreen.preventAutoHideAsync();
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: (failureCount, error) => !isUnauthorized(error) && failureCount < 2,
+      refetchOnWindowFocus: false,
+    },
+  },
+});
 
 function RootLayoutNav() {
+  const { authStatus } = useApp();
+  const segments = useSegments();
+  const inAuth = segments[0] === "auth" || segments[0] === "onboarding";
+
   useEffect(() => {
-    if (Platform.OS !== "web") {
-      AsyncStorage.multiGet(["onboarded", "authToken"]).then(([[, onboarded], [, authToken]]) => {
-        if (!onboarded) {
-          router.replace("/auth/register");
-        } else if (!authToken) {
-          router.replace("/auth/login");
-        }
+    if (authStatus === "loading") return;
+    if (authStatus === "signedOut" && !inAuth) {
+      AsyncStorage.getItem(ONBOARDED_KEY).then((onboarded) => {
+        router.replace(onboarded ? "/auth/login" : "/auth/register");
       });
+    } else if (authStatus === "signedIn" && inAuth) {
+      router.replace("/(tabs)");
     }
-  }, []);
+  }, [authStatus, inAuth]);
 
   return (
     <Stack screenOptions={{ headerShown: false }}>

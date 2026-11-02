@@ -52,3 +52,6 @@ Thumbs.db
 *.sql
 *.dump
 *.tgz
+
+# user uploads (photos, verification docs)
+artifacts/api-server/uploads/

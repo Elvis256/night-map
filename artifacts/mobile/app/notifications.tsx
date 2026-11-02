@@ -1,9 +1,9 @@
 import * as Haptics from "expo-haptics";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import React, { useState } from "react";
+import React from "react";
 import {
+  ActivityIndicator,
   Platform,
   ScrollView,
   StyleSheet,
@@ -12,105 +12,17 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import {
+  getGetUnreadCountQueryKey,
+  getListNotificationsQueryKey,
+  markNotificationsRead,
+  useListNotifications,
+  type Notification,
+} from "@workspace/api-client-react";
 import { useColors } from "@workspace/nightmap-design-system/hooks/use-colors";
+import { relativeTime, useApp } from "@/context/AppContext";
 
-type NotifType = "available" | "rating" | "deal" | "safety" | "new" | "tip" | "super";
-
-interface Notif {
-  id: string;
-  type: NotifType;
-  title: string;
-  body: string;
-  time: string;
-  read: boolean;
-  companionColor?: string;
-  companionInitial?: string;
-  actionLabel?: string;
-  actionRoute?: string;
-}
-
-const INITIAL_NOTIFS: Notif[] = [
-  {
-    id: "n1",
-    type: "available",
-    title: "Amara is available again 🌙",
-    body: "She just came online in Kampala · Now available",
-    time: "2m ago",
-    read: false,
-    companionColor: "#7A3CFF",
-    companionInitial: "A",
-    actionLabel: "Connect",
-    actionRoute: "/companion/1",
-  },
-  {
-    id: "n2",
-    type: "rating",
-    title: "Rate your time with Leila",
-    body: "Your meeting ended — share your Chemistry Score and earn 50 pts",
-    time: "1h ago",
-    read: false,
-    companionColor: "#FF4E62",
-    companionInitial: "L",
-    actionLabel: "Rate Now",
-  },
-  {
-    id: "n3",
-    type: "deal",
-    title: "Tonight's deal expires in 2 hours ⚡",
-    body: "Fatoumata · 35% off · Tonight only in Kampala",
-    time: "2h ago",
-    read: false,
-    companionColor: "#FF8A3D",
-    companionInitial: "F",
-    actionLabel: "View Deal",
-    actionRoute: "/companion/5",
-  },
-  {
-    id: "n4",
-    type: "super",
-    title: "Zara sent you a Super Request ⭐",
-    body: "She's interested in connecting with you tonight",
-    time: "3h ago",
-    read: false,
-    companionColor: "#1FBF6B",
-    companionInitial: "Z",
-    actionLabel: "Respond",
-    actionRoute: "/matches",
-  },
-  {
-    id: "n5",
-    type: "safety",
-    title: "Safety check-in reminder",
-    body: "You've been in a meeting for 60 minutes — confirm you're safe",
-    time: "4h ago",
-    read: true,
-    actionLabel: "I'm Safe",
-  },
-  {
-    id: "n6",
-    type: "new",
-    title: "3 new companions in Kampala",
-    body: "Nadine, Pearl, and 1 more joined tonight",
-    time: "5h ago",
-    read: true,
-    actionLabel: "Discover",
-    actionRoute: "/discover",
-  },
-  {
-    id: "n8",
-    type: "available",
-    title: "Nadine is online now",
-    body: "She's available in Nairobi tonight · 2.4 km away",
-    time: "Yesterday",
-    read: true,
-    companionColor: "#3DA9FF",
-    companionInitial: "N",
-    actionLabel: "View",
-    actionRoute: "/companion/4",
-  },
-];
-
-const TYPE_CONFIG: Record<NotifType, { icon: string; color: string; bg: string }> = {
+const TYPE_CONFIG: Record<string, { icon: string; color: string; bg: string }> = {
   available: { icon: "radio-button-on", color: "#22c55e", bg: "rgba(34,197,94,0.12)" },
   rating: { icon: "flask-outline", color: "#7A3CFF", bg: "rgba(122,60,255,0.12)" },
   deal: { icon: "flash", color: "#FF8A3D", bg: "rgba(255,138,61,0.12)" },
@@ -118,16 +30,22 @@ const TYPE_CONFIG: Record<NotifType, { icon: string; color: string; bg: string }
   new: { icon: "sparkles-outline", color: "#3DA9FF", bg: "rgba(61,169,255,0.12)" },
   tip: { icon: "cash-outline", color: "#1FBF6B", bg: "rgba(31,191,107,0.12)" },
   super: { icon: "star", color: "#FF8A3D", bg: "rgba(255,138,61,0.12)" },
+  connection: { icon: "heart", color: "#FF4E62", bg: "rgba(255,78,98,0.12)" },
+  message: { icon: "chatbubble-ellipses", color: "#3DA9FF", bg: "rgba(61,169,255,0.12)" },
+  booking: { icon: "calendar", color: "#3DA9FF", bg: "rgba(61,169,255,0.12)" },
+  referral: { icon: "gift", color: "#FF8A3D", bg: "rgba(255,138,61,0.12)" },
+  verification: { icon: "shield-checkmark", color: "#1FBF6B", bg: "rgba(31,191,107,0.12)" },
 };
+const DEFAULT_CFG = { icon: "notifications-outline", color: "#AAB3C5", bg: "rgba(170,179,197,0.12)" };
 
 function NotifRow({ notif, onRead, onAction }: {
-  notif: Notif;
+  notif: Notification;
   onRead: (id: string) => void;
-  onAction: (notif: Notif) => void;
+  onAction: (notif: Notification) => void;
 }) {
   const colors = useColors("dark");
-  const cfg = TYPE_CONFIG[notif.type];
-
+  const cfg = TYPE_CONFIG[notif.type] ?? DEFAULT_CFG;
+  const actor = notif.actor ?? null;
   return (
     <TouchableOpacity
       style={[
@@ -137,14 +55,14 @@ function NotifRow({ notif, onRead, onAction }: {
           borderColor: notif.read ? colors.border : `${cfg.color}30`,
         },
       ]}
-      onPress={() => { onRead(notif.id); if (notif.actionRoute) router.push(notif.actionRoute as never); }}
+      onPress={() => onAction(notif)}
       activeOpacity={0.75}
     >
       {/* Left: avatar or icon */}
       <View style={styles.rowLeft}>
-        {notif.companionInitial ? (
-          <View style={[styles.avatar, { backgroundColor: notif.companionColor }]}>
-            <Text style={styles.avatarInit}>{notif.companionInitial}</Text>
+        {actor ? (
+          <View style={[styles.avatar, { backgroundColor: actor.avatarColor }]}>
+            <Text style={styles.avatarInit}>{actor.name[0]?.toUpperCase()}</Text>
           </View>
         ) : (
           <View style={[styles.iconCircle, { backgroundColor: cfg.bg }]}>
@@ -153,20 +71,24 @@ function NotifRow({ notif, onRead, onAction }: {
         )}
         {!notif.read && <View style={[styles.unreadDot, { backgroundColor: cfg.color }]} />}
       </View>
-
       {/* Content */}
       <View style={styles.rowContent}>
         <View style={styles.rowTop}>
           <Text style={[styles.rowTitle, { color: colors.foreground }]} numberOfLines={1}>{notif.title}</Text>
-          <Text style={[styles.rowTime, { color: colors.mutedForeground }]}>{notif.time}</Text>
+          <Text style={[styles.rowTime, { color: colors.mutedForeground }]}>{relativeTime(notif.createdAt)}</Text>
         </View>
         <Text style={[styles.rowBody, { color: colors.mutedForeground }]} numberOfLines={2}>{notif.body}</Text>
         {notif.actionLabel && (
           <TouchableOpacity
             style={[styles.actionPill, { backgroundColor: cfg.bg, borderColor: `${cfg.color}40` }]}
-            onPress={() => { onRead(notif.id); onAction(notif); }}
+            onPress={() => onAction(notif)}
           >
             <Text style={[styles.actionText, { color: cfg.color }]}>{notif.actionLabel}</Text>
+          </TouchableOpacity>
+        )}
+        {!notif.read && !notif.actionLabel && (
+          <TouchableOpacity style={[styles.actionPill, { backgroundColor: colors.muted, borderColor: colors.border }]} onPress={() => onRead(notif.id)}>
+            <Text style={[styles.actionText, { color: colors.mutedForeground }]}>Mark read</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -177,36 +99,26 @@ function NotifRow({ notif, onRead, onAction }: {
 export default function NotificationsScreen() {
   const colors = useColors("dark");
   const insets = useSafeAreaInsets();
-  const [notifs, setNotifs] = useState(INITIAL_NOTIFS);
-
-  React.useEffect(() => {
-    AsyncStorage.getItem("notifications")
-      .then((stored) => {
-        if (stored) setNotifs(JSON.parse(stored) as Notif[]);
-      })
-      .catch(() => {});
-  }, []);
-
+  const { invalidate } = useApp();
+  const query = useListNotifications({ query: { queryKey: getListNotificationsQueryKey(), refetchInterval: 15_000, staleTime: 5_000 } });
+  const notifs = query.data ?? [];
   const unreadCount = notifs.filter((n) => !n.read).length;
 
-  const persist = (next: Notif[]) => {
-    setNotifs(next);
-    AsyncStorage.setItem("notifications", JSON.stringify(next)).catch(() => {});
-  };
+  const afterMark = () => invalidate([getListNotificationsQueryKey(), getGetUnreadCountQueryKey()]);
 
   const markRead = (id: string) => {
-    persist(notifs.map((n) => n.id === id ? { ...n, read: true } : n));
+    markNotificationsRead({ ids: [id] }).then(afterMark).catch(() => {});
   };
   const markAllRead = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    persist(notifs.map((n) => ({ ...n, read: true })));
+    markNotificationsRead({}).then(afterMark).catch(() => {});
   };
-
-  const handleAction = (notif: Notif) => {
-    markRead(notif.id);
+  const handleAction = (notif: Notification) => {
+    if (!notif.read) markRead(notif.id);
     if (notif.actionRoute) router.push(notif.actionRoute as never);
   };
-
+  const unread = notifs.filter((n) => !n.read);
+  const earlier = notifs.filter((n) => n.read);
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={[styles.header, { paddingTop: Platform.OS === "web" ? 67 : insets.top, borderBottomColor: colors.border }]}>
@@ -225,21 +137,30 @@ export default function NotificationsScreen() {
           </TouchableOpacity>
         )}
       </View>
-
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[styles.scroll, { paddingBottom: Platform.OS === "web" ? 34 : insets.bottom + 20 }]}
       >
-        {unreadCount > 0 && (
+        {query.isLoading && <ActivityIndicator color={colors.primary} style={{ marginTop: 24 }} />}
+        {!query.isLoading && notifs.length === 0 && (
+          <View style={{ alignItems: "center", paddingVertical: 48, gap: 8 }}>
+            <Ionicons name="notifications-off-outline" size={40} color={colors.mutedForeground} />
+            <Text style={[styles.rowTitle, { color: colors.foreground }]}>You're all caught up</Text>
+            <Text style={[styles.rowBody, { color: colors.mutedForeground, textAlign: "center" }]}>
+              Connection requests, bookings and deals will show up here.
+            </Text>
+          </View>
+        )}
+        {unread.length > 0 && (
           <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>NEW</Text>
         )}
-        {notifs.filter((n) => !n.read).map((n) => (
+        {unread.map((n) => (
           <NotifRow key={n.id} notif={n} onRead={markRead} onAction={handleAction} />
         ))}
-        {notifs.filter((n) => n.read).length > 0 && (
+        {earlier.length > 0 && (
           <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>EARLIER</Text>
         )}
-        {notifs.filter((n) => n.read).map((n) => (
+        {earlier.map((n) => (
           <NotifRow key={n.id} notif={n} onRead={markRead} onAction={handleAction} />
         ))}
       </ScrollView>

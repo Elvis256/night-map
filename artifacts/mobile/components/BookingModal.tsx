@@ -2,7 +2,7 @@ import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import React, { useState } from "react";
 import {
-  Animated,
+  ActivityIndicator,
   Modal,
   Platform,
   ScrollView,
@@ -16,65 +16,94 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@workspace/nightmap-design-system/hooks/use-colors";
 import { Companion, useApp } from "@/context/AppContext";
+import { errorMessage } from "@/lib/api";
 
 const DATE_OPTIONS = ["Tonight", "Tomorrow", "This Weekend", "Next Week"];
 const DURATION_OPTIONS = [
   { label: "1 hr",  hours: 1 },
   { label: "2 hrs", hours: 2 },
   { label: "3 hrs", hours: 3 },
-  { label: "4+ hrs", hours: 4 },
+  { label: "4 hrs", hours: 4 },
+  { label: "6 hrs", hours: 6 },
 ];
+
+function scheduledFor(dateIdx: number): Date | null {
+  const d = new Date();
+  if (dateIdx === 0) { d.setHours(20, 0, 0, 0); return d; }
+  if (dateIdx === 1) { d.setDate(d.getDate() + 1); d.setHours(20, 0, 0, 0); return d; }
+  if (dateIdx === 2) {
+    const day = d.getDay();
+    const add = day === 6 ? 0 : (6 - day + 7) % 7 || 7;
+    d.setDate(d.getDate() + add); d.setHours(20, 0, 0, 0); return d;
+  }
+  return null;
+}
 
 export function BookingModal({
   visible,
   companion,
   onClose,
+  onBooked,
 }: {
   visible: boolean;
   companion: Companion | null;
   onClose: () => void;
+  onBooked?: (bookingId: string) => void;
 }) {
   const colors = useColors("dark");
   const insets = useSafeAreaInsets();
-  const { addMatch, addBooking } = useApp();
-
+  const { addBooking } = useApp();
   const [selectedService, setSelectedService] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState(0);
-  const [selectedDuration, setSelectedDuration] = useState(1);
+  const [selectedDuration, setSelectedDuration] = useState(0);
   const [note, setNote] = useState("");
   const [sent, setSent] = useState(false);
-
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState("");
   if (!companion) return null;
+  const durations = DURATION_OPTIONS.filter((d) => d.hours >= companion.minBookingHours);
+  const duration = durations[Math.min(selectedDuration, durations.length - 1)] ?? durations[0];
+  const effectiveRate = companion.isTonightsDeal && selectedDate === 0
+    ? Math.round(companion.rate * (1 - companion.dealDiscount / 100))
+    : companion.rate;
+  const total = effectiveRate * (duration?.hours ?? companion.minBookingHours);
+  const services = companion.menu.length > 0 ? companion.menu : ["Dinner Date", "Conversation & Drinks", "City Tour"];
 
-  const total = companion.rate * DURATION_OPTIONS[selectedDuration].hours;
+  const reset = () => {
+    setSent(false);
+    setSelectedService(null);
+    setSelectedDate(0);
+    setSelectedDuration(0);
+    setNote("");
+    setError("");
+  };
 
-  const handleSend = () => {
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    addMatch(companion, "standard");
-    addBooking({
-      companionId: companion.id,
-      companionName: companion.name,
-      companionColor: companion.color,
-      companionInitial: companion.name[0],
-      activity: selectedService!,
-      date: DATE_OPTIONS[selectedDate],
-      time: selectedDate === 0 ? "Tonight" : "To be confirmed",
-      hours: DURATION_OPTIONS[selectedDuration].hours,
-      rate: companion.rate,
-      status: selectedDate === 0 ? "active" : "upcoming",
-      city: companion.city,
-      safetyActive: selectedDate === 0,
-      note: note.trim(),
-    });
-    setSent(true);
-    setTimeout(() => {
-      setSent(false);
-      setSelectedService(null);
-      setSelectedDate(0);
-      setSelectedDuration(1);
-      setNote("");
-      onClose();
-    }, 1800);
+  const handleSend = async () => {
+    if (!selectedService || sending) return;
+    setSending(true);
+    setError("");
+    try {
+      const booking = await addBooking({
+        companionId: companion.id,
+        activity: selectedService,
+        dateLabel: DATE_OPTIONS[selectedDate],
+        hours: duration.hours,
+        note: note.trim() || undefined,
+        scheduledFor: scheduledFor(selectedDate),
+      });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setSent(true);
+      setTimeout(() => {
+        reset();
+        onClose();
+        onBooked?.(booking.id);
+      }, 1800);
+    } catch (err) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      setError(errorMessage(err, "Could not send the request."));
+    } finally {
+      setSending(false);
+    }
   };
 
   return (
@@ -82,11 +111,9 @@ export function BookingModal({
       <TouchableWithoutFeedback onPress={onClose}>
         <View style={styles.backdrop} />
       </TouchableWithoutFeedback>
-
       <View style={[styles.sheet, { backgroundColor: colors.card, paddingBottom: Platform.OS === "web" ? 24 : insets.bottom + 16 }]}>
         {/* Handle */}
         <View style={[styles.handle, { backgroundColor: colors.border }]} />
-
         {/* Header */}
         <View style={styles.header}>
           <View style={[styles.companionAvatar, { backgroundColor: companion.color }]}>
@@ -95,26 +122,24 @@ export function BookingModal({
           </View>
           <View style={{ flex: 1 }}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-              <Text style={[styles.companionName, { color: colors.foreground }]}>{companion.name}, {companion.age}</Text>
+              <Text style={[styles.companionName, { color: colors.foreground }]}>{companion.name}{companion.age ? `, ${companion.age}` : ""}</Text>
               {companion.verified && <Ionicons name="checkmark-circle" size={15} color="#3DA9FF" />}
             </View>
             <Text style={[styles.companionMeta, { color: colors.mutedForeground }]}>
-              {companion.city} · {(companion.rate / 1000).toFixed(0)}k UGX/hr · ★ {companion.rating}
+              {companion.city} · {(companion.rate / 1000).toFixed(0)}k UGX/hr{companion.reviewCount > 0 ? ` · ★ ${companion.rating.toFixed(1)}` : ""}
             </Text>
           </View>
           <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
             <Ionicons name="close" size={20} color={colors.mutedForeground} />
           </TouchableOpacity>
         </View>
-
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.body}>
-
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
           {sent ? (
             <View style={styles.successBlock}>
               <Text style={styles.successEmoji}>✅</Text>
-              <Text style={[styles.successTitle, { color: colors.foreground }]}>Request saved</Text>
+              <Text style={[styles.successTitle, { color: colors.foreground }]}>Request sent</Text>
               <Text style={[styles.successSub, { color: colors.mutedForeground }]}>
-                This preview saves the request on this device. {companion.name} has not been notified, and no payment was made.
+                {companion.name} has been notified and will accept or decline. Track it under My Bookings.
               </Text>
             </View>
           ) : (
@@ -123,7 +148,7 @@ export function BookingModal({
               <View style={styles.section}>
                 <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>SELECT SERVICE</Text>
                 <View style={styles.chipRow}>
-                  {companion.menu.map(s => (
+                  {services.map(s => (
                     <TouchableOpacity
                       key={s}
                       style={[
@@ -140,7 +165,6 @@ export function BookingModal({
                   ))}
                 </View>
               </View>
-
               {/* Date */}
               <View style={styles.section}>
                 <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>WHEN</Text>
@@ -162,30 +186,28 @@ export function BookingModal({
                   ))}
                 </View>
               </View>
-
               {/* Duration */}
               <View style={styles.section}>
-                <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>DURATION</Text>
+                <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>DURATION · MIN {companion.minBookingHours}H</Text>
                 <View style={styles.durationRow}>
-                  {DURATION_OPTIONS.map((d, i) => (
+                  {durations.map((d, i) => (
                     <TouchableOpacity
                       key={d.label}
                       style={[
                         styles.durationBtn,
                         {
-                          backgroundColor: selectedDuration === i ? "rgba(122,60,255,0.12)" : colors.background,
-                          borderColor: selectedDuration === i ? "#7A3CFF" : colors.border,
+                          backgroundColor: duration?.hours === d.hours ? "rgba(122,60,255,0.12)" : colors.background,
+                          borderColor: duration?.hours === d.hours ? "#7A3CFF" : colors.border,
                           flex: 1,
                         },
                       ]}
                       onPress={() => { setSelectedDuration(i); Haptics.selectionAsync(); }}
                     >
-                      <Text style={[styles.durationText, { color: selectedDuration === i ? "#7A3CFF" : colors.foreground }]}>{d.label}</Text>
+                      <Text style={[styles.durationText, { color: duration?.hours === d.hours ? "#7A3CFF" : colors.foreground }]}>{d.label}</Text>
                     </TouchableOpacity>
                   ))}
                 </View>
               </View>
-
               {/* Note */}
               <View style={styles.section}>
                 <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>NOTE (optional)</Text>
@@ -200,11 +222,13 @@ export function BookingModal({
                   maxLength={200}
                 />
               </View>
-
+              {error ? <Text style={[styles.disclaimer, { color: "#FF4E62" }]}>{error}</Text> : null}
               {/* Total + CTA */}
               <View style={[styles.totalBar, { backgroundColor: colors.background, borderColor: colors.border }]}>
                 <View>
-                    <Text style={[styles.totalLabel, { color: colors.mutedForeground }]}>Estimated service total</Text>
+                  <Text style={[styles.totalLabel, { color: colors.mutedForeground }]}>
+                    {companion.isTonightsDeal && selectedDate === 0 ? `Tonight's deal · ${companion.dealDiscount}% off` : "Estimated service total"}
+                  </Text>
                   <Text style={[styles.totalAmount, { color: "#1FBF6B" }]}>
                     UGX {total.toLocaleString()}
                   </Text>
@@ -213,16 +237,16 @@ export function BookingModal({
                   style={[styles.sendBtn, { backgroundColor: selectedService ? colors.primary : colors.muted }]}
                   onPress={selectedService ? handleSend : undefined}
                   activeOpacity={selectedService ? 0.85 : 1}
+                  disabled={sending}
                 >
-                  <Ionicons name="paper-plane" size={15} color="#fff" />
+                  {sending ? <ActivityIndicator color="#fff" size="small" /> : <Ionicons name="paper-plane" size={15} color="#fff" />}
                   <Text style={styles.sendBtnText}>
-                    {selectedService ? "Send Request" : "Pick a service"}
+                    {sending ? "Sending…" : selectedService ? "Send Request" : "Pick a service"}
                   </Text>
                 </TouchableOpacity>
               </View>
-
               <Text style={[styles.disclaimer, { color: colors.mutedForeground }]}>
-                Estimate only. This preview does not notify the companion or process payment.
+                Rates are agreed directly with the companion. NightMap does not process payments.
               </Text>
             </>
           )}

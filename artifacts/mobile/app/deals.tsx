@@ -13,7 +13,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@workspace/nightmap-design-system/hooks/use-colors";
-import { COMPANIONS, Companion, formatUGX, useApp } from "@/context/AppContext";
+import { Companion, formatUGX, useApp } from "@/context/AppContext";
 import { BookingModal } from "@/components/BookingModal";
 
 function useCountdown(targetHour: number) {
@@ -22,7 +22,7 @@ function useCountdown(targetHour: number) {
     const tick = () => {
       const now = new Date();
       const end = new Date();
-      end.setHours(targetHour, 0, 0, 0);
+      end.setHours(targetHour, 59, 59, 0);
       if (end <= now) end.setDate(end.getDate() + 1);
       setSeconds(Math.floor((end.getTime() - now.getTime()) / 1000));
     };
@@ -36,27 +36,21 @@ function useCountdown(targetHour: number) {
   return `${h}:${m}:${s}`;
 }
 
-const DEAL_EXTRAS: Record<string, { label: string; color: string }[]> = {
-  "2": [{ label: "Free pick-up", color: "#1FBF6B" }, { label: "Includes drinks", color: "#3DA9FF" }],
-  "4": [{ label: "2-for-1 tonight", color: "#FF8A3D" }],
-  "6": [{ label: "VIP access included", color: "#7A3CFF" }, { label: "Free transport", color: "#1FBF6B" }],
-  "8": [{ label: "Late-night rate", color: "#FF4E62" }],
-};
+function dealPrice(c: Companion): number {
+  return Math.round(c.rate * (1 - c.dealDiscount / 100));
+}
 
 function DealCard({ companion, rank, onBook }: { companion: Companion; rank: number; onBook: (c: Companion) => void }) {
   const colors = useColors("dark");
   const scaleAnim = useRef(new Animated.Value(1)).current;
-  const originalRate = Math.round(companion.rate / (1 - companion.dealDiscount / 100));
-  const savings = originalRate - companion.rate;
-  const extras = DEAL_EXTRAS[companion.id] ?? [];
-
+  const discounted = dealPrice(companion);
+  const savings = companion.rate - discounted;
   const pulse = () => {
     Animated.sequence([
       Animated.timing(scaleAnim, { toValue: 0.97, duration: 80, useNativeDriver: true }),
       Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true, friction: 6 }),
     ]).start();
   };
-
   return (
     <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
       <TouchableOpacity
@@ -70,7 +64,6 @@ function DealCard({ companion, rank, onBook }: { companion: Companion; rank: num
             <Text style={styles.featuredBannerText}>FEATURED DEAL</Text>
           </View>
         )}
-
         {/* Top section */}
         <View style={styles.dealTop}>
           <View style={[styles.dealAvatar, { backgroundColor: companion.color }]}>
@@ -79,44 +72,40 @@ function DealCard({ companion, rank, onBook }: { companion: Companion; rank: num
               <View style={[styles.dealOnline, { borderColor: colors.card }]} />
             )}
           </View>
-
           <View style={{ flex: 1 }}>
             <View style={styles.dealNameRow}>
               <Text style={[styles.dealName, { color: colors.foreground }]}>
-                {companion.name}, {companion.age}
+                {companion.name}{companion.age ? `, ${companion.age}` : ""}
               </Text>
               {companion.verified && (
                 <Ionicons name="checkmark-circle" size={14} color="#3DA9FF" />
               )}
             </View>
             <Text style={[styles.dealCity, { color: colors.mutedForeground }]}>
-              {companion.city} · {companion.distance} km · ★ {companion.rating}
+              {companion.city}{companion.distance != null ? ` · ${companion.distance} km` : ""}{companion.reviewCount > 0 ? ` · ★ ${companion.rating.toFixed(1)}` : ""}
             </Text>
           </View>
-
           {/* Discount badge */}
           <View style={styles.discountBadge}>
             <Text style={styles.discountPct}>{companion.dealDiscount}%</Text>
             <Text style={styles.discountOff}>OFF</Text>
           </View>
         </View>
-
         {/* Price row */}
         <View style={styles.priceRow}>
           <View>
             <Text style={[styles.priceOld, { color: colors.mutedForeground }]}>
-              {formatUGX(originalRate)}/hr
+              {formatUGX(companion.rate)}/hr
             </Text>
             <Text style={[styles.priceNew, { color: "#1FBF6B" }]}>
-              {formatUGX(companion.rate)}/hr
+              {formatUGX(discounted)}/hr
             </Text>
           </View>
           <View style={[styles.savingsPill, { backgroundColor: "rgba(31,191,107,0.12)", borderColor: "rgba(31,191,107,0.3)" }]}>
             <Ionicons name="trending-down-outline" size={12} color="#1FBF6B" />
-            <Text style={[styles.savingsText, { color: "#1FBF6B" }]}>Save {formatUGX(savings)}</Text>
+            <Text style={[styles.savingsText, { color: "#1FBF6B" }]}>Save {formatUGX(savings)}/hr</Text>
           </View>
         </View>
-
         {/* Vibes */}
         <View style={styles.vibesRow}>
           {companion.vibes.slice(0, 3).map(v => (
@@ -125,19 +114,6 @@ function DealCard({ companion, rank, onBook }: { companion: Companion; rank: num
             </View>
           ))}
         </View>
-
-        {/* Extras */}
-        {extras.length > 0 && (
-          <View style={styles.extrasRow}>
-            {extras.map(e => (
-              <View key={e.label} style={[styles.extraChip, { backgroundColor: `${e.color}12`, borderColor: `${e.color}30` }]}>
-                <Ionicons name="gift-outline" size={10} color={e.color} />
-                <Text style={[styles.extraText, { color: e.color }]}>{e.label}</Text>
-              </View>
-            ))}
-          </View>
-        )}
-
         {/* CTA */}
         <TouchableOpacity
           style={[styles.bookBtn, { backgroundColor: colors.primary }]}
@@ -145,7 +121,7 @@ function DealCard({ companion, rank, onBook }: { companion: Companion; rank: num
           activeOpacity={0.85}
         >
           <Ionicons name="flash" size={15} color="#fff" />
-          <Text style={styles.bookBtnText}>Book Deal · {formatUGX(companion.rate)}/hr</Text>
+          <Text style={styles.bookBtnText}>Book Deal · {formatUGX(discounted)}/hr</Text>
         </TouchableOpacity>
       </TouchableOpacity>
     </Animated.View>
@@ -155,29 +131,21 @@ function DealCard({ companion, rank, onBook }: { companion: Companion; rank: num
 export default function DealsScreen() {
   const colors   = useColors("dark");
   const insets   = useSafeAreaInsets();
-  const { companions } = useApp();
+  const { deals, browseCity } = useApp();
   const [bookingFor, setBookingFor] = useState<Companion | null>(null);
   const countdown = useCountdown(23); // deals expire at midnight
   const flashAnim = useRef(new Animated.Value(1)).current;
-
   useEffect(() => {
-    Animated.loop(
+    const loop = Animated.loop(
       Animated.sequence([
         Animated.timing(flashAnim, { toValue: 0.4, duration: 900, useNativeDriver: true }),
         Animated.timing(flashAnim, { toValue: 1, duration: 900, useNativeDriver: true }),
       ])
-    ).start();
+    );
+    loop.start();
+    return () => loop.stop();
   }, []);
-
-  const deals = companions
-    .filter(c => c.isTonightsDeal)
-    .sort((a, b) => b.dealDiscount - a.dealDiscount);
-
-  const totalSavings = deals.reduce((sum, c) => {
-    const orig = Math.round(c.rate / (1 - c.dealDiscount / 100));
-    return sum + (orig - c.rate);
-  }, 0);
-
+  const totalSavings = deals.reduce((sum, c) => sum + (c.rate - dealPrice(c)), 0);
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       {/* Header */}
@@ -187,11 +155,10 @@ export default function DealsScreen() {
         </TouchableOpacity>
         <View>
           <Text style={[styles.headerTitle, { color: colors.foreground }]}>Tonight's Deals</Text>
-          <Text style={[styles.headerSub, { color: colors.mutedForeground }]}>{deals.length} companions · Limited time</Text>
+          <Text style={[styles.headerSub, { color: colors.mutedForeground }]}>{deals.length} companion{deals.length === 1 ? "" : "s"} · {browseCity} · Limited time</Text>
         </View>
         <View style={{ width: 36 }} />
       </View>
-
       {/* Countdown banner */}
       <View style={[styles.countdownBanner, { backgroundColor: "rgba(255,138,61,0.08)", borderColor: "rgba(255,138,61,0.2)" }]}>
         <Animated.View style={{ opacity: flashAnim }}>
@@ -204,10 +171,9 @@ export default function DealsScreen() {
         <View style={[styles.savingsPillLg, { backgroundColor: "rgba(31,191,107,0.12)", borderColor: "rgba(31,191,107,0.3)" }]}>
           <Text style={[styles.savingsPillLabel, { color: colors.mutedForeground }]}>Up to</Text>
           <Text style={[styles.savingsPillVal, { color: "#1FBF6B" }]}>{formatUGX(totalSavings)}</Text>
-          <Text style={[styles.savingsPillLabel, { color: colors.mutedForeground }]}>saved</Text>
+          <Text style={[styles.savingsPillLabel, { color: colors.mutedForeground }]}>saved /hr</Text>
         </View>
       </View>
-
       <ScrollView
         contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 24 }]}
         showsVerticalScrollIndicator={false}
@@ -215,7 +181,7 @@ export default function DealsScreen() {
         {deals.length === 0 ? (
           <View style={styles.empty}>
             <Text style={styles.emptyEmoji}>🌙</Text>
-            <Text style={[styles.emptyTitle, { color: colors.foreground }]}>No deals tonight</Text>
+            <Text style={[styles.emptyTitle, { color: colors.foreground }]}>No deals tonight in {browseCity}</Text>
             <Text style={[styles.emptyDesc, { color: colors.mutedForeground }]}>
               Check back after 6 PM — companions post their evening deals then
             </Text>
@@ -226,7 +192,6 @@ export default function DealsScreen() {
           ))
         )}
       </ScrollView>
-
       <BookingModal visible={!!bookingFor} companion={bookingFor} onClose={() => setBookingFor(null)} />
     </View>
   );

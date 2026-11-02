@@ -1,9 +1,12 @@
 import * as Haptics from "expo-haptics";
+import * as ImagePicker from "expo-image-picker";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
+  Image,
   Linking,
   Modal,
   Platform,
@@ -17,12 +20,28 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import {
+  getGetProfileViewsQueryKey,
+  getGetScoreQueryKey,
+  getListStoriesQueryKey,
+  postStory,
+  safetyCheckIn,
+  triggerPanic,
+  uploadPhoto,
+  useGetProfileViews,
+  useGetScore,
+} from "@workspace/api-client-react";
 import { useColors } from "@workspace/nightmap-design-system/hooks/use-colors";
 import { withAlpha } from "@workspace/nightmap-design-system/lib/native-theme";
 import { useLocationCity } from "@/hooks/useLocationCity";
-import { useApp } from "@/context/AppContext";
+import { relativeTime, useApp, type AvailabilityStatus } from "@/context/AppContext";
+import { errorMessage } from "@/lib/api";
+
+const MENU_OPTIONS = ["Dinner Date", "Nightclub", "Movie Night", "Pool/Swim", "Massage", "Conversation & Drinks", "City Tour", "Events", "Travel Companion"];
+const DEAL_OPTIONS = [15, 20, 30, 40];
+const LANGUAGES = ["English", "Swahili", "French", "Luganda"];
+const TIER_ORDER = ["Bronze", "Silver", "Gold", "Platinum"];
 
 function SettingRow({
   icon,
@@ -66,7 +85,10 @@ function SettingRow({
 export default function ProfileScreen() {
   const colors = useColors("dark");
   const insets = useSafeAreaInsets();
-  const { userProfile, toggleAvailability, updateProfile, matches } = useApp();
+  const {
+    userProfile, toggleAvailability, updateProfile, updateCompanionProfile, matches, bookings,
+    signOut, deleteAccount, refreshMe, coords, invalidate,
+  } = useApp();
   const [panicActive, setPanicActive] = useState(false);
   const [contactInput, setContactInput] = useState(userProfile.trustedContact);
   const [showContactInput, setShowContactInput] = useState(false);
@@ -74,104 +96,132 @@ export default function ProfileScreen() {
   const [editName, setEditName] = useState(userProfile.name);
   const [editBio, setEditBio] = useState(userProfile.bio ?? "");
   const [editCity, setEditCity] = useState(userProfile.city);
+  const [saving, setSaving] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
-  const saveEdit = () => {
-    updateProfile({
-      name: editName.trim() || userProfile.name,
-      bio: editBio.trim(),
-      city: editCity.trim() || userProfile.city,
-    });
-    setShowEdit(false);
+  const scoreQuery = useGetScore({ query: { queryKey: getGetScoreQueryKey(), staleTime: 30_000 } });
+  const viewsQuery = useGetProfileViews({ query: { queryKey: getGetProfileViewsQueryKey(), staleTime: 30_000 } });
+  const score = scoreQuery.data;
+  const tierIdx = Math.max(0, TIER_ORDER.indexOf(score?.tier ?? "Bronze"));
+
+  const fail = (err: unknown) => Alert.alert("Something went wrong", errorMessage(err));
+  const apply = (updates: Parameters<typeof updateProfile>[0]) => updateProfile(updates).catch(fail);
+
+  const saveEdit = async () => {
+    setSaving(true);
+    try {
+      await updateProfile({
+        name: editName.trim() || userProfile.name,
+        bio: editBio.trim(),
+        city: editCity.trim() || userProfile.city,
+      });
+      setShowEdit(false);
+    } catch (err) {
+      fail(err);
+    } finally {
+      setSaving(false);
+    }
   };
-
   // GPS city detection
   const { detect: detectCity, status: detectStatus } = useLocationCity((city) => {
-    updateProfile({ city });
+    apply({ city });
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   });
-
   // Settings modals
   const [showPrivacy, setShowPrivacy] = useState(false);
   const [showNotifs, setShowNotifs] = useState(false);
   const [showSupport, setShowSupport] = useState(false);
   const [showLanguage, setShowLanguage] = useState(false);
+  const [showListing, setShowListing] = useState(false);
+  // Preferences live on the server; local state mirrors the profile for snappy switches.
+  const [privacy, setPrivacy] = useState(userProfile.privacy);
+  const [notifs, setNotifs] = useState(userProfile.notificationPrefs);
+  useEffect(() => { setPrivacy(userProfile.privacy); }, [userProfile.privacy]);
+  useEffect(() => { setNotifs(userProfile.notificationPrefs); }, [userProfile.notificationPrefs]);
+  useEffect(() => { setContactInput(userProfile.trustedContact); }, [userProfile.trustedContact]);
+  const setPrivacyKey = (key: keyof typeof privacy, v: boolean) => {
+    const next = { ...privacy, [key]: v };
+    setPrivacy(next);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    apply({ privacy: next });
+  };
+  const setNotifKey = (key: keyof typeof notifs, v: boolean) => {
+    const next = { ...notifs, [key]: v };
+    setNotifs(next);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    apply({ notificationPrefs: next });
+  };
+  const language = userProfile.language;
 
-  // Preferences are stored locally with the rest of the account state.
-  const [privShowDistance, setPrivShowDistance] = useState(true);
-  const [privShowOnline, setPrivShowOnline] = useState(true);
-  const [privAllowSaves, setPrivAllowSaves] = useState(true);
-  const [privHideFromSearch, setPrivHideFromSearch] = useState(false);
+  // Companion listing
+  const cp = userProfile.companionProfile;
+  const [rateInput, setRateInput] = useState(String(cp?.rate ?? 100000));
+  const [minHoursInput, setMinHoursInput] = useState(String(cp?.minBookingHours ?? 2));
+  const [storyText, setStoryText] = useState("");
+  const [postingStory, setPostingStory] = useState(false);
+  const [listingBusy, setListingBusy] = useState(false);
+  useEffect(() => {
+    setRateInput(String(cp?.rate ?? 100000));
+    setMinHoursInput(String(cp?.minBookingHours ?? 2));
+  }, [cp?.rate, cp?.minBookingHours]);
+  const runListing = async (updates: Parameters<typeof updateCompanionProfile>[0]) => {
+    setListingBusy(true);
+    try {
+      await updateCompanionProfile(updates);
+      Haptics.selectionAsync();
+    } catch (err) {
+      fail(err);
+    } finally {
+      setListingBusy(false);
+    }
+  };
+  const toggleMenuItem = (item: string) => {
+    const current = cp?.menu ?? [];
+    const next = current.includes(item) ? current.filter((m) => m !== item) : [...current, item];
+    void runListing({ menu: next });
+  };
+  const saveRate = async () => {
+    const rate = Math.max(0, Math.round(Number(rateInput.replace(/[^0-9]/g, "")) || 0));
+    const minBookingHours = Math.min(24, Math.max(1, Math.round(Number(minHoursInput) || 1)));
+    await runListing({ rate, minBookingHours });
+    setShowListing(false);
+  };
+  const handlePostStory = async () => {
+    if (!storyText.trim() || postingStory) return;
+    setPostingStory(true);
+    try {
+      await postStory({ text: storyText.trim() });
+      setStoryText("");
+      invalidate([getListStoriesQueryKey({ city: userProfile.city })]);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert("Story posted", "Your status is visible to seekers for the next 24 hours.");
+    } catch (err) {
+      fail(err);
+    } finally {
+      setPostingStory(false);
+    }
+  };
 
-  // Notification toggles
-  const [notifMessages, setNotifMessages] = useState(true);
-  const [notifBookings, setNotifBookings] = useState(true);
-  const [notifDeals, setNotifDeals] = useState(true);
-  const [notifLive, setNotifLive] = useState(false);
-  const [notifRadio, setNotifRadio] = useState(false);
-
-  const [language, setLanguage] = useState("English");
-  const LANGUAGES = ["English", "Swahili", "French", "Luganda"];
-  const [preferencesLoaded, setPreferencesLoaded] = useState(false);
-
-  React.useEffect(() => {
-    AsyncStorage.getItem("profilePreferences")
-      .then((stored) => {
-        if (stored) {
-          const preferences = JSON.parse(stored) as {
-            privShowDistance?: boolean;
-            privShowOnline?: boolean;
-            privAllowSaves?: boolean;
-            privHideFromSearch?: boolean;
-            notifMessages?: boolean;
-            notifBookings?: boolean;
-            notifDeals?: boolean;
-            notifLive?: boolean;
-            notifRadio?: boolean;
-            language?: string;
-          };
-          if (preferences.privShowDistance !== undefined) setPrivShowDistance(preferences.privShowDistance);
-          if (preferences.privShowOnline !== undefined) setPrivShowOnline(preferences.privShowOnline);
-          if (preferences.privAllowSaves !== undefined) setPrivAllowSaves(preferences.privAllowSaves);
-          if (preferences.privHideFromSearch !== undefined) setPrivHideFromSearch(preferences.privHideFromSearch);
-          if (preferences.notifMessages !== undefined) setNotifMessages(preferences.notifMessages);
-          if (preferences.notifBookings !== undefined) setNotifBookings(preferences.notifBookings);
-          if (preferences.notifDeals !== undefined) setNotifDeals(preferences.notifDeals);
-          if (preferences.notifLive !== undefined) setNotifLive(preferences.notifLive);
-          if (preferences.notifRadio !== undefined) setNotifRadio(preferences.notifRadio);
-          if (preferences.language) setLanguage(preferences.language);
-        }
-      })
-      .catch(() => {})
-      .finally(() => setPreferencesLoaded(true));
-  }, []);
-
-  React.useEffect(() => {
-    if (!preferencesLoaded) return;
-    AsyncStorage.setItem("profilePreferences", JSON.stringify({
-      privShowDistance,
-      privShowOnline,
-      privAllowSaves,
-      privHideFromSearch,
-      notifMessages,
-      notifBookings,
-      notifDeals,
-      notifLive,
-      notifRadio,
-      language,
-    })).catch(() => {});
-  }, [
-    preferencesLoaded,
-    privShowDistance,
-    privShowOnline,
-    privAllowSaves,
-    privHideFromSearch,
-    notifMessages,
-    notifBookings,
-    notifDeals,
-    notifLive,
-    notifRadio,
-    language,
-  ]);
+  const handlePickPhoto = async () => {
+    if (uploadingPhoto) return;
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert("Photo access needed", "Enable photo library access in Settings to add a profile photo.");
+      return;
+    }
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], base64: true, quality: 0.7, allowsEditing: true, aspect: [1, 1] });
+      if (result.canceled || !result.assets[0]?.base64) return;
+      setUploadingPhoto(true);
+      await uploadPhoto({ dataBase64: result.assets[0].base64, contentType: "image/jpeg", isPrimary: true });
+      await refreshMe();
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (err) {
+      fail(err);
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
 
   const handleSignOut = () => {
     Alert.alert("Sign Out", "Are you sure you want to sign out?", [
@@ -180,14 +230,12 @@ export default function ProfileScreen() {
         text: "Sign Out",
         style: "destructive",
         onPress: async () => {
-          const AsyncStorage = (await import("@react-native-async-storage/async-storage")).default;
-          await AsyncStorage.removeItem("authToken");
+          await signOut();
           router.replace("/auth/login");
         },
       },
     ]);
   };
-
   const handleDeleteAccount = () => {
     Alert.alert(
       "Delete Account",
@@ -198,49 +246,78 @@ export default function ProfileScreen() {
           text: "Delete Forever",
           style: "destructive",
           onPress: async () => {
-            const AsyncStorage = (await import("@react-native-async-storage/async-storage")).default;
-            await AsyncStorage.clear();
-            router.replace("/auth/register");
+            try {
+              await deleteAccount();
+              router.replace("/auth/register");
+            } catch (err) {
+              fail(err);
+            }
           },
         },
       ]
     );
   };
-
   const handleShare = async () => {
     try {
       await Share.share({
-        message: "Join me on NightMap — East Africa's social companionship platform 🌙\nnightmap.itsolutionsuganda.com",
+        message: `Join me on NightMap — East Africa's social companionship platform 🌙\nUse my invite code ${userProfile.referralCode}\nnightmap.itsolutionsuganda.com`,
         title: "NightMap",
       });
     } catch (_) {}
   };
-
-  const handlePanic = () => {
+  const handlePanic = async () => {
+    if (panicActive) return;
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     setPanicActive(true);
-    Alert.alert(
-      "PANIC ALERT SENT",
-      `Emergency alert sent to ${userProfile.trustedContact || "safety team"}.\n\nYour GPS location is being shared now. Stay safe — our safety team has been notified.`,
-      [{ text: "I am Safe", style: "destructive", onPress: () => setPanicActive(false) }]
-    );
+    try {
+      const event = await triggerPanic({ lat: coords?.lat, lng: coords?.lng });
+      Alert.alert(
+        "PANIC ALERT SENT",
+        event.contactsNotified > 0
+          ? `Emergency alert sent to ${event.contactsNotified} trusted contact${event.contactsNotified > 1 ? "s" : ""} and the NightMap safety team.\n\nYour GPS location is being shared now. Stay safe.`
+          : "Emergency alert sent to the NightMap safety team.\n\nAdd a trusted contact so they are alerted too.",
+        [{ text: "I am Safe", style: "destructive", onPress: () => setPanicActive(false) }]
+      );
+    } catch (err) {
+      setPanicActive(false);
+      Alert.alert("Alert not sent", errorMessage(err, "Could not reach NightMap. Call your emergency contact directly."));
+    }
+  };
+  const handleSafeCheckIn = async () => {
+    try {
+      const event = await safetyCheckIn({ lat: coords?.lat, lng: coords?.lng });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert(
+        "Safety Check-In",
+        event.contactsNotified > 0
+          ? `Your location has been shared with ${event.contactsNotified} trusted contact${event.contactsNotified > 1 ? "s" : ""}.`
+          : "Check-in recorded. Add a trusted contact so they receive your location.",
+        [{ text: "OK" }],
+      );
+    } catch (err) {
+      fail(err);
+    }
   };
 
-  const handleSafeCheckIn = () => {
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    Alert.alert("Safety Check-In", "Your location has been shared with your trusted contact. The 60-minute auto-check timer has started.", [{ text: "OK" }]);
-  };
+  const activeBookings = bookings.filter(b => b.status === "active").length;
+  const pendingRequests = bookings.filter(b => b.status === "pending" || b.status === "upcoming").length;
+  const verifyBanner =
+    userProfile.verificationStatus === "pending"
+      ? { title: "Verification under review", sub: "Our team reviews within 24 hours", icon: "time-outline" as const }
+      : userProfile.verificationStatus === "rejected"
+        ? { title: "Resubmit verification", sub: "Your last submission wasn't approved · tap to retry", icon: "alert-circle-outline" as const }
+        : { title: "Get Verified", sub: "National ID + selfie + 5-sec video · 24h review", icon: "shield-outline" as const };
+  const availability: AvailabilityStatus = cp?.availabilityStatus ?? "offline";
+  const dealActive = !!cp && cp.dealDiscount > 0;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-
     {/* ── Edit Profile Modal ─────────────────────────────── */}
     <Modal visible={showEdit} transparent animationType="slide" onRequestClose={() => setShowEdit(false)}>
       <Pressable style={styles.editBackdrop} onPress={() => setShowEdit(false)}>
         <Pressable style={[styles.editSheet, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <View style={[styles.editHandle, { backgroundColor: colors.border }]} />
           <Text style={[styles.editTitle, { color: colors.foreground }]}>Edit Profile</Text>
-
           <Text style={[styles.editLabel, { color: colors.mutedForeground }]}>DISPLAY NAME</Text>
           <TextInput
             style={[styles.editInput, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.muted }]}
@@ -251,7 +328,6 @@ export default function ProfileScreen() {
             maxLength={30}
             autoCapitalize="words"
           />
-
           <Text style={[styles.editLabel, { color: colors.mutedForeground }]}>BIO</Text>
           <TextInput
             style={[styles.editInput, styles.editBioInput, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.muted }]}
@@ -259,11 +335,10 @@ export default function ProfileScreen() {
             onChangeText={setEditBio}
             placeholder="A short intro about yourself…"
             placeholderTextColor={colors.mutedForeground}
-            maxLength={140}
+            maxLength={300}
             multiline
             numberOfLines={3}
           />
-
           <Text style={[styles.editLabel, { color: colors.mutedForeground }]}>CITY</Text>
           <TextInput
             style={[styles.editInput, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.muted }]}
@@ -274,86 +349,109 @@ export default function ProfileScreen() {
             maxLength={30}
             autoCapitalize="words"
           />
-
           <TouchableOpacity
-            style={[styles.editSaveBtn, { backgroundColor: colors.primary }]}
+            style={[styles.editSaveBtn, { backgroundColor: colors.primary, opacity: saving ? 0.7 : 1 }]}
             onPress={saveEdit}
+            disabled={saving}
           >
-            <Text style={styles.editSaveBtnText}>Save Changes</Text>
+            {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.editSaveBtnText}>Save Changes</Text>}
           </TouchableOpacity>
         </Pressable>
       </Pressable>
     </Modal>
-
+    {/* ── Listing (rate) Modal ───────────────────────────── */}
+    <Modal visible={showListing} transparent animationType="slide" onRequestClose={() => setShowListing(false)}>
+      <Pressable style={styles.editBackdrop} onPress={() => setShowListing(false)}>
+        <Pressable style={[styles.editSheet, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View style={[styles.editHandle, { backgroundColor: colors.border }]} />
+          <Text style={[styles.editTitle, { color: colors.foreground }]}>Rate & minimum</Text>
+          <Text style={[styles.editLabel, { color: colors.mutedForeground }]}>HOURLY RATE (UGX)</Text>
+          <TextInput
+            style={[styles.editInput, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.muted }]}
+            value={rateInput}
+            onChangeText={setRateInput}
+            keyboardType="number-pad"
+            placeholder="150000"
+            placeholderTextColor={colors.mutedForeground}
+          />
+          <Text style={[styles.editLabel, { color: colors.mutedForeground }]}>MINIMUM BOOKING (HOURS)</Text>
+          <TextInput
+            style={[styles.editInput, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.muted }]}
+            value={minHoursInput}
+            onChangeText={setMinHoursInput}
+            keyboardType="number-pad"
+            placeholder="2"
+            placeholderTextColor={colors.mutedForeground}
+          />
+          <TouchableOpacity style={[styles.editSaveBtn, { backgroundColor: "#1FBF6B", opacity: listingBusy ? 0.7 : 1 }]} onPress={saveRate} disabled={listingBusy}>
+            {listingBusy ? <ActivityIndicator color="#fff" /> : <Text style={styles.editSaveBtnText}>Save listing</Text>}
+          </TouchableOpacity>
+        </Pressable>
+      </Pressable>
+    </Modal>
     {/* ── Privacy Modal ─────────────────────────────────── */}
     <Modal visible={showPrivacy} transparent animationType="slide" onRequestClose={() => setShowPrivacy(false)}>
       <Pressable style={styles.editBackdrop} onPress={() => setShowPrivacy(false)}>
         <Pressable style={[styles.editSheet, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <View style={[styles.editHandle, { backgroundColor: colors.border }]} />
           <Text style={[styles.editTitle, { color: colors.foreground }]}>Privacy</Text>
-
           {([
-            { label: "Show my distance", sub: "Companions see how far you are", val: privShowDistance, set: setPrivShowDistance },
-            { label: "Show online status", sub: "Others can see when you're active", val: privShowOnline, set: setPrivShowOnline },
-            { label: "Allow profile saves", sub: "Let companions save your profile", val: privAllowSaves, set: setPrivAllowSaves },
-            { label: "Hide from search", sub: "Only visible to your connections", val: privHideFromSearch, set: setPrivHideFromSearch },
+            { key: "showDistance", label: "Show my distance", sub: "Others see how far you are" },
+            { key: "showOnline", label: "Show online status", sub: "Others can see when you're active" },
+            { key: "allowSaves", label: "Allow profile saves", sub: "Let people save your profile" },
+            { key: "hideFromSearch", label: "Hide from search", sub: "Only visible to your connections" },
           ] as const).map((item) => (
-            <View key={item.label} style={[styles.settingModalRow, { borderBottomColor: colors.border }]}>
+            <View key={item.key} style={[styles.settingModalRow, { borderBottomColor: colors.border }]}>
               <View style={{ flex: 1 }}>
                 <Text style={[styles.settingModalLabel, { color: colors.foreground }]}>{item.label}</Text>
                 <Text style={[styles.settingModalSub, { color: colors.mutedForeground }]}>{item.sub}</Text>
               </View>
               <Switch
-                value={item.val}
-                onValueChange={(v) => { item.set(v); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
+                value={privacy[item.key]}
+                onValueChange={(v) => setPrivacyKey(item.key, v)}
                 trackColor={{ false: colors.border, true: "#3DA9FF" }}
                 thumbColor="#fff"
               />
             </View>
           ))}
-
           <TouchableOpacity style={[styles.editSaveBtn, { backgroundColor: "#3DA9FF" }]} onPress={() => setShowPrivacy(false)}>
             <Text style={styles.editSaveBtnText}>Done</Text>
           </TouchableOpacity>
         </Pressable>
       </Pressable>
     </Modal>
-
     {/* ── Notifications Modal ───────────────────────────── */}
     <Modal visible={showNotifs} transparent animationType="slide" onRequestClose={() => setShowNotifs(false)}>
       <Pressable style={styles.editBackdrop} onPress={() => setShowNotifs(false)}>
         <Pressable style={[styles.editSheet, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <View style={[styles.editHandle, { backgroundColor: colors.border }]} />
           <Text style={[styles.editTitle, { color: colors.foreground }]}>Notifications</Text>
-
           {([
-            { label: "New messages", sub: "Push alert when someone messages you", val: notifMessages, set: setNotifMessages, color: "#FF4E62" },
-            { label: "Booking requests", sub: "Notify me of new booking activity", val: notifBookings, set: setNotifBookings, color: "#FF8A3D" },
-            { label: "Tonight's deals", sub: "Flash deals from nearby companions", val: notifDeals, set: setNotifDeals, color: "#FFC400" },
-            { label: "Live streams", sub: "When a companion you like goes live", val: notifLive, set: setNotifLive, color: "#7A3CFF" },
-            { label: "Radio updates", sub: "New lounges and radio sessions", val: notifRadio, set: setNotifRadio, color: "#1FBF6B" },
+            { key: "messages", label: "New messages", sub: "Alert when someone messages you", color: "#FF4E62" },
+            { key: "bookings", label: "Booking requests", sub: "Notify me of new booking activity", color: "#FF8A3D" },
+            { key: "deals", label: "Tonight's deals", sub: "Flash deals and saved companions going live", color: "#FFC400" },
+            { key: "live", label: "Live streams", sub: "When a companion you like goes live", color: "#7A3CFF" },
+            { key: "radio", label: "Radio updates", sub: "New lounges and radio sessions", color: "#1FBF6B" },
           ] as const).map((item) => (
-            <View key={item.label} style={[styles.settingModalRow, { borderBottomColor: colors.border }]}>
+            <View key={item.key} style={[styles.settingModalRow, { borderBottomColor: colors.border }]}>
               <View style={{ flex: 1 }}>
                 <Text style={[styles.settingModalLabel, { color: colors.foreground }]}>{item.label}</Text>
                 <Text style={[styles.settingModalSub, { color: colors.mutedForeground }]}>{item.sub}</Text>
               </View>
               <Switch
-                value={item.val}
-                onValueChange={(v) => { item.set(v); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
+                value={notifs[item.key]}
+                onValueChange={(v) => setNotifKey(item.key, v)}
                 trackColor={{ false: colors.border, true: item.color }}
                 thumbColor="#fff"
               />
             </View>
           ))}
-
           <TouchableOpacity style={[styles.editSaveBtn, { backgroundColor: "#FF8A3D" }]} onPress={() => setShowNotifs(false)}>
             <Text style={styles.editSaveBtnText}>Done</Text>
           </TouchableOpacity>
         </Pressable>
       </Pressable>
     </Modal>
-
     {/* ── Language Modal ────────────────────────────────── */}
     <Modal visible={showLanguage} transparent animationType="slide" onRequestClose={() => setShowLanguage(false)}>
       <Pressable style={styles.editBackdrop} onPress={() => setShowLanguage(false)}>
@@ -365,7 +463,7 @@ export default function ProfileScreen() {
               <TouchableOpacity
                 key={lang}
                 style={[styles.langRow, { backgroundColor: language === lang ? "rgba(122,60,255,0.12)" : colors.muted, borderColor: language === lang ? "#7A3CFF" : colors.border }]}
-                onPress={() => { setLanguage(lang); Haptics.selectionAsync(); setShowLanguage(false); }}
+                onPress={() => { apply({ language: lang }); Haptics.selectionAsync(); setShowLanguage(false); }}
               >
                 <Text style={[styles.langLabel, { color: language === lang ? "#7A3CFF" : colors.foreground }]}>{lang}</Text>
                 {language === lang && <Ionicons name="checkmark-circle" size={20} color="#7A3CFF" />}
@@ -375,7 +473,6 @@ export default function ProfileScreen() {
         </Pressable>
       </Pressable>
     </Modal>
-
     {/* ── Support Modal ─────────────────────────────────── */}
     <Modal visible={showSupport} transparent animationType="slide" onRequestClose={() => setShowSupport(false)}>
       <Pressable style={styles.editBackdrop} onPress={() => setShowSupport(false)}>
@@ -383,12 +480,11 @@ export default function ProfileScreen() {
           <View style={[styles.editHandle, { backgroundColor: colors.border }]} />
           <Text style={[styles.editTitle, { color: colors.foreground }]}>Support</Text>
           <Text style={[styles.settingModalSub, { color: colors.mutedForeground, marginTop: -8 }]}>Available 24/7 across East Africa</Text>
-
           {([
             { icon: "logo-whatsapp", label: "WhatsApp Chat", sub: "+256 700 000000", color: "#25D366", action: () => Linking.openURL("https://wa.me/256700000000") },
             { icon: "mail-outline", label: "Email Support", sub: "support@nightmap.app", color: "#3DA9FF", action: () => Linking.openURL("mailto:support@nightmap.app") },
             { icon: "globe-outline", label: "Help Center", sub: "nightmap.itsolutionsuganda.com", color: "#FF8A3D", action: () => Linking.openURL("https://nightmap.itsolutionsuganda.com") },
-            { icon: "flag-outline", label: "Report a Problem", sub: "Safety issues, bugs, billing", color: "#FF4E62", action: () => Linking.openURL("mailto:safety@nightmap.app?subject=Report") },
+            { icon: "flag-outline", label: "Report a Problem", sub: "Safety issues, bugs, billing", color: "#FF4E62", action: () => router.push("/safety") },
           ] as const).map((item) => (
             <TouchableOpacity
               key={item.label}
@@ -409,11 +505,11 @@ export default function ProfileScreen() {
         </Pressable>
       </Pressable>
     </Modal>
-
     <ScrollView
       style={{ flex: 1 }}
       contentContainerStyle={{ paddingBottom: Platform.OS === "web" ? 34 : insets.bottom + 24 }}
       showsVerticalScrollIndicator={false}
+      keyboardShouldPersistTaps="handled"
     >
       <View style={[styles.header, { paddingTop: Platform.OS === "web" ? 67 : insets.top }]}>
         <Text style={[styles.headerTitle, { color: colors.foreground }]}>Profile</Text>
@@ -421,24 +517,32 @@ export default function ProfileScreen() {
           <Ionicons name="create-outline" size={17} color={colors.foreground} />
         </TouchableOpacity>
       </View>
-
       {/* Profile card */}
       <View style={[styles.profileCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-        <View style={[styles.avatarRing, { borderColor: userProfile.verified ? colors.accent : colors.border }]}>
-          <View style={[styles.avatar, { backgroundColor: colors.muted }]}>
-            <Ionicons name="person" size={34} color={colors.mutedForeground} />
+        <TouchableOpacity onPress={handlePickPhoto} activeOpacity={0.8} disabled={uploadingPhoto}>
+          <View style={[styles.avatarRing, { borderColor: userProfile.verified ? colors.accent : colors.border }]}>
+            <View style={[styles.avatar, { backgroundColor: userProfile.photoUrl ? colors.muted : userProfile.avatarColor, overflow: "hidden" }]}>
+              {uploadingPhoto ? (
+                <ActivityIndicator color="#fff" />
+              ) : userProfile.photoUrl ? (
+                <Image source={{ uri: userProfile.photoUrl }} style={styles.avatarImage} />
+              ) : (
+                <Text style={styles.avatarInitial}>{userProfile.name[0]?.toUpperCase() ?? "?"}</Text>
+              )}
+            </View>
           </View>
-        </View>
+          <View style={[styles.avatarEditBadge, { backgroundColor: colors.primary, borderColor: colors.card }]}>
+            <Ionicons name="camera" size={11} color="#fff" />
+          </View>
+        </TouchableOpacity>
         <Text style={[styles.profileName, { color: colors.foreground }]}>{userProfile.name}</Text>
         <View style={styles.profileCityRow}>
           <Ionicons name="location-outline" size={13} color={colors.mutedForeground} />
-          <Text style={[styles.profileCity, { color: colors.mutedForeground }]}>{userProfile.city}</Text>
+          <Text style={[styles.profileCity, { color: colors.mutedForeground }]}>{userProfile.city} · {userProfile.phone}</Text>
         </View>
-
         {!!userProfile.bio && (
           <Text style={[styles.profileBio, { color: colors.mutedForeground }]} numberOfLines={2}>{userProfile.bio}</Text>
         )}
-
         <View style={styles.statsRow}>
           <View style={styles.stat}>
             <Text style={[styles.statNum, { color: colors.primary }]}>{matches.length}</Text>
@@ -466,22 +570,127 @@ export default function ProfileScreen() {
           </View>
         </View>
       </View>
-
       {/* Verification CTA */}
       {!userProfile.verified && (
         <TouchableOpacity
           style={[styles.verifyBanner, { backgroundColor: "rgba(255,138,61,0.1)", borderColor: colors.accent }]}
           onPress={() => router.push("/verify")}
         >
-          <Ionicons name="shield-outline" size={20} color={colors.accent} />
+          <Ionicons name={verifyBanner.icon} size={20} color={colors.accent} />
           <View style={{ flex: 1 }}>
-            <Text style={[styles.verifyTitle, { color: colors.accent }]}>Get Verified</Text>
-            <Text style={[styles.verifySubtitle, { color: colors.mutedForeground }]}>National ID + selfie + 5-sec video · 24h review</Text>
+            <Text style={[styles.verifyTitle, { color: colors.accent }]}>{verifyBanner.title}</Text>
+            <Text style={[styles.verifySubtitle, { color: colors.mutedForeground }]}>{verifyBanner.sub}</Text>
           </View>
           <Ionicons name="chevron-forward" size={16} color={colors.accent} />
         </TouchableOpacity>
       )}
-
+      {/* Companion listing */}
+      {userProfile.isCompanion && (
+        <>
+          <Text style={[styles.sectionHeader, { color: colors.mutedForeground }]}>MY LISTING</Text>
+          <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border, padding: 14, gap: 12 }]}>
+            <View>
+              <Text style={[styles.listingLabel, { color: colors.mutedForeground }]}>AVAILABILITY</Text>
+              <View style={styles.segment}>
+                {([["now", "Available now", "#22c55e"], ["tonight", "Tonight", "#FF8A3D"], ["offline", "Offline", "#6b6b8a"]] as const).map(([value, label, color]) => (
+                  <TouchableOpacity
+                    key={value}
+                    style={[styles.segmentBtn, { backgroundColor: availability === value ? `${color}22` : colors.muted, borderColor: availability === value ? color : colors.border }]}
+                    onPress={() => runListing({ availabilityStatus: value })}
+                    disabled={listingBusy}
+                  >
+                    <Text style={[styles.segmentText, { color: availability === value ? color : colors.mutedForeground }]}>{label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+            <TouchableOpacity style={[styles.listingRow, { borderColor: colors.border, backgroundColor: colors.muted }]} onPress={() => setShowListing(true)}>
+              <Ionicons name="pricetag-outline" size={17} color={colors.primary} />
+              <Text style={[styles.settingLabel, { color: colors.foreground }]}>Rate</Text>
+              <Text style={[styles.settingValue, { color: colors.mutedForeground }]}>
+                UGX {(cp?.rate ?? 0).toLocaleString()}/hr · min {cp?.minBookingHours ?? 1}h
+              </Text>
+              <Ionicons name="chevron-forward" size={15} color={colors.mutedForeground} />
+            </TouchableOpacity>
+            <View>
+              <Text style={[styles.listingLabel, { color: colors.mutedForeground }]}>THE MENU · what you offer</Text>
+              <View style={styles.chipWrap}>
+                {MENU_OPTIONS.map((item) => {
+                  const on = (cp?.menu ?? []).includes(item);
+                  return (
+                    <TouchableOpacity
+                      key={item}
+                      style={[styles.menuChip, { backgroundColor: on ? "rgba(255,78,98,0.12)" : colors.muted, borderColor: on ? colors.primary : colors.border }]}
+                      onPress={() => toggleMenuItem(item)}
+                      disabled={listingBusy}
+                    >
+                      <Text style={[styles.menuChipText, { color: on ? colors.primary : colors.mutedForeground }]}>{item}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+            <View style={[styles.listingRow, { borderColor: dealActive ? "#FF8A3D" : colors.border, backgroundColor: dealActive ? "rgba(255,138,61,0.08)" : colors.muted }]}>
+              <Ionicons name="flash" size={17} color="#FF8A3D" />
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.settingLabel, { color: colors.foreground }]}>Tonight's deal</Text>
+                <Text style={[styles.settingValue, { color: colors.mutedForeground }]}>
+                  {dealActive ? `${cp?.dealDiscount}% off until midnight` : "Offer a discount tonight only"}
+                </Text>
+              </View>
+              <Switch
+                value={dealActive}
+                onValueChange={(v) => runListing({ dealActive: v, dealDiscount: v ? (cp?.dealDiscount || 20) : 0 })}
+                trackColor={{ false: colors.border, true: "#FF8A3D" }}
+                thumbColor="#fff"
+                disabled={listingBusy}
+              />
+            </View>
+            {dealActive && (
+              <View style={styles.chipWrap}>
+                {DEAL_OPTIONS.map((pct) => (
+                  <TouchableOpacity
+                    key={pct}
+                    style={[styles.menuChip, { backgroundColor: cp?.dealDiscount === pct ? "rgba(255,138,61,0.15)" : colors.muted, borderColor: cp?.dealDiscount === pct ? "#FF8A3D" : colors.border }]}
+                    onPress={() => runListing({ dealActive: true, dealDiscount: pct })}
+                    disabled={listingBusy}
+                  >
+                    <Text style={[styles.menuChipText, { color: cp?.dealDiscount === pct ? "#FF8A3D" : colors.mutedForeground }]}>{pct}% off</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+            <View>
+              <Text style={[styles.listingLabel, { color: colors.mutedForeground }]}>POST A STORY · 24h status</Text>
+              <View style={styles.storyRow}>
+                <TextInput
+                  style={[styles.storyInput, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.muted }]}
+                  placeholder="e.g. Available tonight from 8pm 🌙"
+                  placeholderTextColor={colors.mutedForeground}
+                  value={storyText}
+                  onChangeText={setStoryText}
+                  maxLength={140}
+                />
+                <TouchableOpacity
+                  style={[styles.storyBtn, { backgroundColor: storyText.trim() ? colors.primary : colors.muted }]}
+                  onPress={handlePostStory}
+                  disabled={!storyText.trim() || postingStory}
+                >
+                  {postingStory ? <ActivityIndicator color="#fff" size="small" /> : <Ionicons name="send" size={16} color={storyText.trim() ? "#fff" : colors.mutedForeground} />}
+                </TouchableOpacity>
+              </View>
+            </View>
+            <TouchableOpacity
+              style={[styles.goLiveBtn, { backgroundColor: "rgba(255,78,98,0.12)", borderColor: "rgba(255,78,98,0.4)" }]}
+              onPress={() => router.push({ pathname: "/live", params: { mode: "broadcast" } })}
+            >
+              <View style={styles.goLiveDot} />
+              <Text style={[styles.goLiveText, { color: colors.primary }]}>Go live</Text>
+              <Text style={[styles.settingValue, { color: colors.mutedForeground }]}>Stream to seekers in {userProfile.city}</Text>
+            </TouchableOpacity>
+          </View>
+        </>
+      )}
       {/* Loyalty Points / NightMap Score */}
       <TouchableOpacity
         style={[styles.loyaltyCard, { backgroundColor: colors.card, borderColor: colors.border }]}
@@ -494,32 +703,33 @@ export default function ProfileScreen() {
           </View>
           <View style={styles.loyaltyInfo}>
             <Text style={[styles.loyaltyTitle, { color: colors.foreground }]}>NightMap Score</Text>
-            <Text style={[styles.loyaltyTier, { color: colors.accent }]}>⚡ Silver Member · 340 pts</Text>
+            <Text style={[styles.loyaltyTier, { color: colors.accent }]}>⚡ {score?.tier ?? "Bronze"} Member · {score?.points ?? userProfile.loyaltyPoints} pts</Text>
           </View>
           <View style={[styles.loyaltyBadge, { backgroundColor: "rgba(255,138,61,0.15)", borderColor: "rgba(255,138,61,0.3)" }]}>
-            <Text style={[styles.loyaltyBadgeText, { color: colors.accent }]}>340</Text>
+            <Text style={[styles.loyaltyBadgeText, { color: colors.accent }]}>{score?.points ?? userProfile.loyaltyPoints}</Text>
             <Text style={[styles.loyaltyBadgeSub, { color: colors.accent }]}>pts</Text>
           </View>
         </View>
         <View style={[styles.progressTrack, { backgroundColor: colors.muted }]}>
-          <View style={[styles.progressFill, { backgroundColor: colors.accent, width: "68%" }]} />
+          <View style={[styles.progressFill, { backgroundColor: colors.accent, width: `${Math.round((score?.progress ?? 0) * 100)}%` }]} />
         </View>
         <View style={styles.tierRow}>
-          {["Bronze", "Silver", "Gold", "Platinum"].map((t, i) => (
+          {TIER_ORDER.map((t, i) => (
             <Text
               key={t}
               style={[
                 styles.tierLabel,
-                { color: i === 1 ? colors.accent : colors.mutedForeground, fontFamily: i === 1 ? "Inter_700Bold" : "Inter_400Regular" },
+                { color: i === tierIdx ? colors.accent : colors.mutedForeground, fontFamily: i === tierIdx ? "Inter_700Bold" : "Inter_400Regular" },
               ]}
             >
               {t}
             </Text>
           ))}
         </View>
-        <Text style={[styles.progressHint, { color: colors.mutedForeground }]}>160 pts to Gold · Earn by rating meetups & referring friends</Text>
+        <Text style={[styles.progressHint, { color: colors.mutedForeground }]}>
+          {score?.nextTier ? `${score.ptsToNext} pts to ${score.nextTier} · ` : "Top tier reached · "}Earn by rating meetups & referring friends
+        </Text>
       </TouchableOpacity>
-
       {/* Packages card */}
       <TouchableOpacity
         style={[styles.vipCard, { backgroundColor: withAlpha(colors.accent, 0.1), borderColor: withAlpha(colors.accent, 0.3) }]}
@@ -546,37 +756,41 @@ export default function ProfileScreen() {
           </Text>
         </View>
       </TouchableOpacity>
-
       {/* Who Viewed Me */}
       <Text style={[styles.sectionHeader, { color: colors.mutedForeground }]}>WHO VIEWED MY PROFILE</Text>
       <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
-        {([
-          { name: "Amara", time: "2m ago", color: "#7A3CFF", hidden: false },
-          { name: "Leila", time: "1h ago", color: "#FF4E62", hidden: false },
-          { name: "Zara", time: "3h ago", color: "#1FBF6B", hidden: false },
-          { name: "Hidden User", time: "5h ago", color: "#6b6b8a", hidden: true },
-        ] as const).map((v, i) => (
-          <View key={i} style={[styles.settingRow, { borderBottomColor: colors.border }]}>
-            <View style={[styles.settingIcon, { backgroundColor: v.hidden ? colors.muted : `${v.color}20` }]}>
+        {viewsQuery.isLoading && <ActivityIndicator color={colors.primary} style={{ paddingVertical: 14 }} />}
+        {!viewsQuery.isLoading && (viewsQuery.data ?? []).length === 0 && (
+          <View style={[styles.settingRow, { borderBottomColor: colors.border }]}>
+            <Text style={[styles.settingValue, { color: colors.mutedForeground }]}>No profile views yet</Text>
+          </View>
+        )}
+        {(viewsQuery.data ?? []).slice(0, 6).map((v) => (
+          <TouchableOpacity
+            key={v.id}
+            style={[styles.settingRow, { borderBottomColor: colors.border }]}
+            onPress={() => !v.hidden && v.viewerId && router.push(`/companion/${v.viewerId}`)}
+            activeOpacity={v.hidden ? 1 : 0.7}
+          >
+            <View style={[styles.settingIcon, { backgroundColor: v.hidden ? colors.muted : v.viewerColor }]}>
               {v.hidden
                 ? <Ionicons name="eye-off-outline" size={17} color={colors.mutedForeground} />
-                : <Text style={{ fontFamily: "Inter_700Bold", fontSize: 14, color: "#fff" }}>{v.name[0]}</Text>}
+                : <Text style={{ fontFamily: "Inter_700Bold", fontSize: 14, color: "#fff" }}>{v.viewerName[0]}</Text>}
             </View>
             <Text style={[styles.settingLabel, { color: v.hidden ? colors.mutedForeground : colors.foreground }]}>
-              {v.name}
+              {v.viewerName}
             </Text>
-            <Text style={[styles.settingValue, { color: colors.mutedForeground }]}>{v.time}</Text>
+            <Text style={[styles.settingValue, { color: colors.mutedForeground }]}>{relativeTime(v.viewedAt)}</Text>
             {v.hidden && (
               <View style={[styles.vipLock, { backgroundColor: "rgba(122,60,255,0.12)" }]}>
-                <Ionicons name="lock-closed" size={10} color="#7A3CFF" />
-                <Text style={[styles.vipLockText, { color: "#7A3CFF" }]}>VIP</Text>
+                <Ionicons name="eye-off" size={10} color="#7A3CFF" />
+                <Text style={[styles.vipLockText, { color: "#7A3CFF" }]}>Ghost</Text>
               </View>
             )}
-          </View>
+          </TouchableOpacity>
         ))}
       </View>
-
-      {/* Wallet preview — balances and transactions are not active */}
+      {/* Wallet */}
       <TouchableOpacity
         style={[styles.walletCard, { backgroundColor: colors.card, borderColor: userProfile.isCompanion ? colors.primary : colors.border }]}
         onPress={() => router.push("/wallet")}
@@ -591,11 +805,10 @@ export default function ProfileScreen() {
         </View>
         <View style={styles.walletStats}>
           <Text style={[styles.walletLabel, { color: colors.mutedForeground }]}>
-            Payments are not connected in this preview
+            Meetup totals and history · in-app payments not connected yet
           </Text>
         </View>
       </TouchableOpacity>
-
       {/* Bookings */}
       <TouchableOpacity
         style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}
@@ -607,11 +820,16 @@ export default function ProfileScreen() {
           iconBg="rgba(61,169,255,0.12)"
           iconColor="#3DA9FF"
           label={userProfile.isCompanion ? "Booking Requests" : "My Bookings"}
-          value={userProfile.isCompanion ? "3 requests" : "1 active"}
+          value={
+            activeBookings > 0
+              ? `${activeBookings} active`
+              : pendingRequests > 0
+                ? `${pendingRequests} ${userProfile.isCompanion ? "request" : "upcoming"}${pendingRequests > 1 ? "s" : ""}`
+                : `${bookings.length} total`
+          }
           onPress={() => router.push("/bookings")}
         />
       </TouchableOpacity>
-
       {/* Mode settings */}
       <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <SettingRow
@@ -624,7 +842,7 @@ export default function ProfileScreen() {
               value={userProfile.availableTonight}
               onValueChange={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                toggleAvailability();
+                toggleAvailability().catch(fail);
               }}
               trackColor={{ false: colors.border, true: colors.primary }}
               thumbColor="#fff"
@@ -640,7 +858,7 @@ export default function ProfileScreen() {
           right={
             <Switch
               value={userProfile.ghostMode}
-              onValueChange={(v) => updateProfile({ ghostMode: v })}
+              onValueChange={(v) => apply({ ghostMode: v })}
               trackColor={{ false: colors.border, true: colors.mutedForeground }}
               thumbColor="#fff"
             />
@@ -654,7 +872,7 @@ export default function ProfileScreen() {
           right={
             <Switch
               value={userProfile.isLadiesMode}
-              onValueChange={(v) => updateProfile({ isLadiesMode: v })}
+              onValueChange={(v) => apply({ isLadiesMode: v })}
               trackColor={{ false: colors.border, true: "#2196f3" }}
               thumbColor="#fff"
             />
@@ -668,20 +886,19 @@ export default function ProfileScreen() {
           <View style={styles.modeToggle}>
             <TouchableOpacity
               style={[styles.modeBtn, !userProfile.isCompanion && { backgroundColor: colors.primary }]}
-              onPress={() => updateProfile({ isCompanion: false })}
+              onPress={() => apply({ isCompanion: false })}
             >
               <Text style={[styles.modeBtnText, { color: !userProfile.isCompanion ? "#fff" : colors.mutedForeground }]}>Seeker</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.modeBtn, userProfile.isCompanion && { backgroundColor: colors.primary }]}
-              onPress={() => updateProfile({ isCompanion: true })}
+              onPress={() => apply({ isCompanion: true })}
             >
               <Text style={[styles.modeBtnText, { color: userProfile.isCompanion ? "#fff" : colors.mutedForeground }]}>Companion</Text>
             </TouchableOpacity>
           </View>
         </View>
       </View>
-
       {/* Safety */}
       <Text style={[styles.sectionHeader, { color: colors.mutedForeground }]}>SAFETY</Text>
       <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -714,7 +931,7 @@ export default function ProfileScreen() {
               keyboardType="phone-pad"
               autoFocus
               onBlur={() => {
-                updateProfile({ trustedContact: contactInput });
+                apply({ trustedContact: contactInput });
                 setShowContactInput(false);
               }}
             />
@@ -727,13 +944,7 @@ export default function ProfileScreen() {
           label="Safety Check-In"
           onPress={handleSafeCheckIn}
         />
-        <SettingRow
-          icon="time-outline"
-          label="60-Min Auto Check"
-          value="Enabled"
-        />
       </View>
-
       {/* Panic button */}
       <TouchableOpacity
         style={[
@@ -752,11 +963,10 @@ export default function ProfileScreen() {
             {panicActive ? "ALERT SENT" : "Panic Button"}
           </Text>
           <Text style={[styles.panicSubtitle, { color: panicActive ? "rgba(255,255,255,0.8)" : "rgba(255,78,98,0.7)" }]}>
-            Hold to send emergency alert + GPS
+            Tap to send emergency alert + GPS
           </Text>
         </View>
       </TouchableOpacity>
-
       {/* App settings */}
       <Text style={[styles.sectionHeader, { color: colors.mutedForeground }]}>SETTINGS</Text>
       <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -765,7 +975,7 @@ export default function ProfileScreen() {
           iconBg="rgba(61,169,255,0.12)"
           iconColor="#3DA9FF"
           label="Privacy"
-          value={privHideFromSearch ? "Restricted" : "Standard"}
+          value={privacy.hideFromSearch ? "Restricted" : "Standard"}
           onPress={() => setShowPrivacy(true)}
         />
         <SettingRow
@@ -773,7 +983,7 @@ export default function ProfileScreen() {
           iconBg="rgba(255,138,61,0.12)"
           iconColor="#FF8A3D"
           label="Notifications"
-          value={[notifMessages, notifBookings, notifDeals, notifLive, notifRadio].filter(Boolean).length + " on"}
+          value={Object.values(notifs).filter(Boolean).length + " on"}
           onPress={() => setShowNotifs(true)}
         />
         <SettingRow
@@ -793,7 +1003,6 @@ export default function ProfileScreen() {
           onPress={() => setShowLanguage(true)}
         />
       </View>
-
       <Text style={[styles.sectionHeader, { color: colors.mutedForeground }]}>MORE</Text>
       <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <SettingRow
@@ -801,7 +1010,7 @@ export default function ProfileScreen() {
           iconBg="rgba(255,138,61,0.12)"
           iconColor="#FF8A3D"
           label="Refer & Earn"
-          value="200 pts + UGX 5k per invite"
+          value="+200 pts per invite"
           onPress={() => router.push("/referral")}
         />
         <SettingRow
@@ -841,7 +1050,6 @@ export default function ProfileScreen() {
           onPress={() => Linking.openURL("https://nightmap.itsolutionsuganda.com/privacy")}
         />
       </View>
-
       <Text style={[styles.sectionHeader, { color: colors.mutedForeground }]}>ACCOUNT</Text>
       <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <SettingRow
@@ -857,7 +1065,6 @@ export default function ProfileScreen() {
           onPress={handleDeleteAccount}
         />
       </View>
-
       <Text style={[styles.version, { color: colors.mutedForeground }]}>NightMap v1.0 · Uganda · Kenya · Tanzania</Text>
     </ScrollView>
     </View>
@@ -865,6 +1072,26 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
+  avatarImage: { width: "100%", height: "100%" },
+  avatarInitial: { color: "#fff", fontFamily: "Inter_700Bold", fontSize: 28 },
+  avatarEditBadge: {
+    position: "absolute", bottom: 2, right: 2, width: 24, height: 24, borderRadius: 12,
+    alignItems: "center", justifyContent: "center", borderWidth: 2,
+  },
+  listingLabel: { fontFamily: "Inter_700Bold", fontSize: 10, letterSpacing: 1, marginBottom: 8 },
+  segment: { flexDirection: "row", gap: 8 },
+  segmentBtn: { flex: 1, borderRadius: 12, borderWidth: 1, paddingVertical: 10, alignItems: "center" },
+  segmentText: { fontFamily: "Inter_600SemiBold", fontSize: 12 },
+  listingRow: { flexDirection: "row", alignItems: "center", gap: 10, borderRadius: 12, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 10 },
+  chipWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  menuChip: { borderRadius: 16, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 7 },
+  menuChipText: { fontFamily: "Inter_500Medium", fontSize: 12 },
+  storyRow: { flexDirection: "row", gap: 8, alignItems: "center" },
+  storyInput: { flex: 1, borderRadius: 12, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 10, fontFamily: "Inter_400Regular", fontSize: 13 },
+  storyBtn: { width: 42, height: 42, borderRadius: 21, alignItems: "center", justifyContent: "center" },
+  goLiveBtn: { flexDirection: "row", alignItems: "center", gap: 8, borderRadius: 12, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 12 },
+  goLiveDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: "#FF4E62" },
+  goLiveText: { fontFamily: "Inter_700Bold", fontSize: 14 },
   container: { flex: 1 },
   header: {
     flexDirection: "row",

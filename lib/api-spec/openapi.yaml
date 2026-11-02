@@ -2,21 +2,36 @@ openapi: 3.1.0
 info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
-  version: 0.1.0
-  description: API specification
+  version: 1.0.0
+  description: NightMap API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
-    description: Health operations
+  - name: auth
+  - name: me
+  - name: companions
+  - name: connections
+  - name: bookings
+  - name: reviews
+  - name: notifications
+  - name: score
+  - name: referrals
+  - name: safety
+  - name: wallet
+  - name: streams
+  - name: lounges
+  - name: city
+  - name: verification
+  - name: admin
+
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,13 +39,2492 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  # ───────────────────────── auth ─────────────────────────
+  /auth/register:
+    post:
+      operationId: register
+      tags: [auth]
+      summary: Create an account with phone + PIN
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+      responses:
+        "201":
+          description: Account created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "409":
+          $ref: "#/components/responses/Error"
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: Sign in with phone + PIN
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Signed in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          $ref: "#/components/responses/Error"
+  /auth/logout:
+    post:
+      operationId: logout
+      tags: [auth]
+      summary: Revoke the current session
+      responses:
+        "204":
+          description: Logged out
+
+  # ───────────────────────── me ─────────────────────────
+  /me:
+    get:
+      operationId: getMe
+      tags: [me]
+      summary: Current user
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+    patch:
+      operationId: updateMe
+      tags: [me]
+      summary: Update profile and preferences
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateMeRequest"
+      responses:
+        "200":
+          description: Updated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+    delete:
+      operationId: deleteMe
+      tags: [me]
+      summary: Permanently delete the account
+      responses:
+        "204":
+          description: Deleted
+  /me/companion-profile:
+    patch:
+      operationId: updateCompanionProfile
+      tags: [me]
+      summary: Update companion listing details
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateCompanionProfileRequest"
+      responses:
+        "200":
+          description: Updated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+  /me/presence:
+    post:
+      operationId: heartbeat
+      tags: [me]
+      summary: Presence heartbeat with optional location
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PresenceRequest"
+      responses:
+        "204":
+          description: Recorded
+  /me/photos:
+    post:
+      operationId: uploadPhoto
+      tags: [me]
+      summary: Upload a profile photo (base64)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UploadPhotoRequest"
+      responses:
+        "201":
+          description: Photo stored
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Photo"
+  /me/photos/{photoId}:
+    delete:
+      operationId: deletePhoto
+      tags: [me]
+      summary: Remove a profile photo
+      parameters:
+        - $ref: "#/components/parameters/PhotoId"
+      responses:
+        "204":
+          description: Removed
+  /me/swipes:
+    get:
+      operationId: getMySwipes
+      tags: [me]
+      summary: Ids the user has liked or passed
+      responses:
+        "200":
+          description: Swipe ids
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SwipeSummary"
+  /me/saved:
+    get:
+      operationId: getSavedCompanions
+      tags: [me]
+      summary: Saved companions
+      responses:
+        "200":
+          description: Saved list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CompanionCard"
+  /me/profile-views:
+    get:
+      operationId: getProfileViews
+      tags: [me]
+      summary: Who viewed my profile
+      responses:
+        "200":
+          description: Recent viewers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ProfileView"
+  /me/stories:
+    post:
+      operationId: postStory
+      tags: [me]
+      summary: Post a 24h status story (companions)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PostStoryRequest"
+      responses:
+        "201":
+          description: Story created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Story"
+  /me/score:
+    get:
+      operationId: getScore
+      tags: [score]
+      summary: Loyalty points, tier and recent activity
+      responses:
+        "200":
+          description: Score summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScoreSummary"
+  /me/referral:
+    get:
+      operationId: getReferral
+      tags: [referrals]
+      summary: Referral code and invite history
+      responses:
+        "200":
+          description: Referral summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReferralSummary"
+  /me/trusted-contacts:
+    get:
+      operationId: listTrustedContacts
+      tags: [safety]
+      summary: Trusted contacts
+      responses:
+        "200":
+          description: Contacts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TrustedContact"
+    post:
+      operationId: addTrustedContact
+      tags: [safety]
+      summary: Add a trusted contact
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TrustedContactRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrustedContact"
+  /me/trusted-contacts/{contactId}:
+    delete:
+      operationId: deleteTrustedContact
+      tags: [safety]
+      summary: Remove a trusted contact
+      parameters:
+        - name: contactId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Removed
+
+  # ───────────────────────── companions ─────────────────────────
+  /companions:
+    get:
+      operationId: listCompanions
+      tags: [companions]
+      summary: Browse companions
+      parameters:
+        - name: city
+          in: query
+          schema:
+            type: string
+        - name: gender
+          in: query
+          schema:
+            type: string
+            enum: [female, male]
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [all, now, tonight]
+        - name: verifiedOnly
+          in: query
+          schema:
+            type: boolean
+        - name: minRating
+          in: query
+          schema:
+            type: number
+        - name: maxRate
+          in: query
+          schema:
+            type: integer
+        - name: maxDistance
+          in: query
+          schema:
+            type: number
+        - name: category
+          in: query
+          schema:
+            type: string
+        - name: lat
+          in: query
+          schema:
+            type: number
+        - name: lng
+          in: query
+          schema:
+            type: number
+        - name: excludeSwiped
+          in: query
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: Companion cards
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CompanionCard"
+  /companions/{companionId}:
+    get:
+      operationId: getCompanion
+      tags: [companions]
+      summary: Companion detail (records a profile view)
+      parameters:
+        - $ref: "#/components/parameters/CompanionId"
+      responses:
+        "200":
+          description: Companion detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CompanionDetail"
+        "404":
+          $ref: "#/components/responses/Error"
+  /companions/{companionId}/reviews:
+    get:
+      operationId: listCompanionReviews
+      tags: [reviews]
+      summary: Reviews for a companion
+      parameters:
+        - $ref: "#/components/parameters/CompanionId"
+      responses:
+        "200":
+          description: Reviews
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Review"
+  /companions/{companionId}/swipe:
+    post:
+      operationId: swipeCompanion
+      tags: [companions]
+      summary: Like or pass a companion
+      parameters:
+        - $ref: "#/components/parameters/CompanionId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SwipeRequest"
+      responses:
+        "200":
+          description: Updated swipe summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SwipeSummary"
+  /companions/{companionId}/save:
+    post:
+      operationId: toggleSaveCompanion
+      tags: [companions]
+      summary: Toggle saved state
+      parameters:
+        - $ref: "#/components/parameters/CompanionId"
+      responses:
+        "200":
+          description: Saved state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SavedState"
+  /deals:
+    get:
+      operationId: listDeals
+      tags: [companions]
+      summary: Tonight's deals
+      parameters:
+        - name: city
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Companions with active deals
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CompanionCard"
+  /stories:
+    get:
+      operationId: listStories
+      tags: [companions]
+      summary: Active companion stories
+      parameters:
+        - name: city
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Stories
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Story"
+
+  # ───────────────────────── connections ─────────────────────────
+  /connections:
+    get:
+      operationId: listConnections
+      tags: [connections]
+      summary: Inbox
+      responses:
+        "200":
+          description: Connections
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Connection"
+    post:
+      operationId: createConnection
+      tags: [connections]
+      summary: Send a connection request
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateConnectionRequest"
+      responses:
+        "201":
+          description: Connection
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Connection"
+  /connections/{connectionId}:
+    get:
+      operationId: getConnection
+      tags: [connections]
+      summary: One connection
+      parameters:
+        - $ref: "#/components/parameters/ConnectionId"
+      responses:
+        "200":
+          description: Connection
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Connection"
+    patch:
+      operationId: respondToConnection
+      tags: [connections]
+      summary: Accept or decline (companion side)
+      parameters:
+        - $ref: "#/components/parameters/ConnectionId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RespondConnectionRequest"
+      responses:
+        "200":
+          description: Connection
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Connection"
+  /connections/{connectionId}/messages:
+    get:
+      operationId: listMessages
+      tags: [connections]
+      summary: Messages in a connection
+      parameters:
+        - $ref: "#/components/parameters/ConnectionId"
+        - name: after
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Messages
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Message"
+    post:
+      operationId: sendMessage
+      tags: [connections]
+      summary: Send a message
+      parameters:
+        - $ref: "#/components/parameters/ConnectionId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendMessageRequest"
+      responses:
+        "201":
+          description: Message
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Message"
+  /connections/{connectionId}/read:
+    post:
+      operationId: markConnectionRead
+      tags: [connections]
+      summary: Mark all messages read
+      parameters:
+        - $ref: "#/components/parameters/ConnectionId"
+      responses:
+        "204":
+          description: Marked
+
+  # ───────────────────────── bookings ─────────────────────────
+  /bookings:
+    get:
+      operationId: listBookings
+      tags: [bookings]
+      summary: My bookings (either side)
+      responses:
+        "200":
+          description: Bookings
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Booking"
+    post:
+      operationId: createBooking
+      tags: [bookings]
+      summary: Request a booking
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateBookingRequest"
+      responses:
+        "201":
+          description: Booking
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Booking"
+  /bookings/{bookingId}:
+    patch:
+      operationId: updateBooking
+      tags: [bookings]
+      summary: Accept, decline, cancel, start or complete
+      parameters:
+        - $ref: "#/components/parameters/BookingId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BookingActionRequest"
+      responses:
+        "200":
+          description: Booking
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Booking"
+
+  # ───────────────────────── reviews ─────────────────────────
+  /reviews:
+    post:
+      operationId: createReview
+      tags: [reviews]
+      summary: Submit a chemistry score
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateReviewRequest"
+      responses:
+        "201":
+          description: Review with points earned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReviewResult"
+
+  # ───────────────────────── notifications ─────────────────────────
+  /notifications:
+    get:
+      operationId: listNotifications
+      tags: [notifications]
+      summary: Notifications
+      responses:
+        "200":
+          description: Notifications
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Notification"
+  /notifications/read:
+    post:
+      operationId: markNotificationsRead
+      tags: [notifications]
+      summary: Mark notifications read (all when ids omitted)
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MarkReadRequest"
+      responses:
+        "204":
+          description: Marked
+  /notifications/unread-count:
+    get:
+      operationId: getUnreadCount
+      tags: [notifications]
+      summary: Unread notification + message counts
+      responses:
+        "200":
+          description: Counts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UnreadCounts"
+
+  # ───────────────────────── safety ─────────────────────────
+  /safety/panic:
+    post:
+      operationId: triggerPanic
+      tags: [safety]
+      summary: Send an emergency alert
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SafetyEventRequest"
+      responses:
+        "201":
+          description: Event recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SafetyEvent"
+  /safety/checkin:
+    post:
+      operationId: safetyCheckIn
+      tags: [safety]
+      summary: Share location with trusted contacts
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SafetyEventRequest"
+      responses:
+        "201":
+          description: Event recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SafetyEvent"
+  /safety/incidents:
+    post:
+      operationId: reportIncident
+      tags: [safety]
+      summary: Report an incident
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IncidentRequest"
+      responses:
+        "201":
+          description: Event recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SafetyEvent"
+  /safety/events:
+    get:
+      operationId: listSafetyEvents
+      tags: [safety]
+      summary: My safety events
+      responses:
+        "200":
+          description: Events
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SafetyEvent"
+
+  # ───────────────────────── wallet ─────────────────────────
+  /wallet:
+    get:
+      operationId: getWallet
+      tags: [wallet]
+      summary: Balance, earnings and ledger
+      responses:
+        "200":
+          description: Wallet
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WalletSummary"
+
+  # ───────────────────────── streams ─────────────────────────
+  /streams:
+    get:
+      operationId: listStreams
+      tags: [streams]
+      summary: Live streams
+      responses:
+        "200":
+          description: Streams
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Stream"
+    post:
+      operationId: startStream
+      tags: [streams]
+      summary: Go live
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StartStreamRequest"
+      responses:
+        "201":
+          description: Stream
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Stream"
+  /streams/{streamId}:
+    get:
+      operationId: getStream
+      tags: [streams]
+      summary: Stream detail
+      parameters:
+        - $ref: "#/components/parameters/StreamId"
+      responses:
+        "200":
+          description: Stream
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Stream"
+  /streams/{streamId}/join:
+    post:
+      operationId: joinStream
+      tags: [streams]
+      summary: Join as a viewer (also a heartbeat)
+      parameters:
+        - $ref: "#/components/parameters/StreamId"
+      responses:
+        "200":
+          description: Stream
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Stream"
+  /streams/{streamId}/leave:
+    post:
+      operationId: leaveStream
+      tags: [streams]
+      summary: Leave the stream
+      parameters:
+        - $ref: "#/components/parameters/StreamId"
+      responses:
+        "204":
+          description: Left
+  /streams/{streamId}/heart:
+    post:
+      operationId: sendStreamHeart
+      tags: [streams]
+      summary: Send a heart
+      parameters:
+        - $ref: "#/components/parameters/StreamId"
+      responses:
+        "200":
+          description: Stream
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Stream"
+  /streams/{streamId}/end:
+    post:
+      operationId: endStream
+      tags: [streams]
+      summary: End the stream (host)
+      parameters:
+        - $ref: "#/components/parameters/StreamId"
+      responses:
+        "200":
+          description: Stream
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Stream"
+  /streams/{streamId}/comments:
+    get:
+      operationId: listStreamComments
+      tags: [streams]
+      summary: Stream comments
+      parameters:
+        - $ref: "#/components/parameters/StreamId"
+        - name: after
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Comments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StreamComment"
+    post:
+      operationId: postStreamComment
+      tags: [streams]
+      summary: Comment on a stream
+      parameters:
+        - $ref: "#/components/parameters/StreamId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CommentRequest"
+      responses:
+        "201":
+          description: Comment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StreamComment"
+
+  # ───────────────────────── lounges ─────────────────────────
+  /lounges:
+    get:
+      operationId: listLounges
+      tags: [lounges]
+      summary: Radio lounges
+      responses:
+        "200":
+          description: Lounges
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Lounge"
+    post:
+      operationId: createLounge
+      tags: [lounges]
+      summary: Start a lounge
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateLoungeRequest"
+      responses:
+        "201":
+          description: Lounge
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Lounge"
+  /lounges/{loungeId}/join:
+    post:
+      operationId: joinLounge
+      tags: [lounges]
+      summary: Join a lounge (also a heartbeat)
+      parameters:
+        - $ref: "#/components/parameters/LoungeId"
+      responses:
+        "200":
+          description: Lounge
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Lounge"
+  /lounges/{loungeId}/leave:
+    post:
+      operationId: leaveLounge
+      tags: [lounges]
+      summary: Leave a lounge
+      parameters:
+        - $ref: "#/components/parameters/LoungeId"
+      responses:
+        "204":
+          description: Left
+  /lounges/{loungeId}/end:
+    post:
+      operationId: endLounge
+      tags: [lounges]
+      summary: End a lounge (host)
+      parameters:
+        - $ref: "#/components/parameters/LoungeId"
+      responses:
+        "200":
+          description: Lounge
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Lounge"
+
+  # ───────────────────────── city ─────────────────────────
+  /cities/{city}/weather:
+    get:
+      operationId: getCityWeather
+      tags: [city]
+      summary: Current weather for a supported city
+      parameters:
+        - name: city
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Weather
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Weather"
+  /outages:
+    get:
+      operationId: listOutages
+      tags: [city]
+      summary: Community-reported power outages
+      parameters:
+        - name: city
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Outage reports
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/OutageReport"
+    post:
+      operationId: reportOutage
+      tags: [city]
+      summary: Report a power outage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OutageRequest"
+      responses:
+        "201":
+          description: Outage report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OutageReport"
+
+  # ───────────────────────── verification ─────────────────────────
+  /verification:
+    get:
+      operationId: getVerification
+      tags: [verification]
+      summary: My latest verification request
+      responses:
+        "200":
+          description: Verification status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VerificationStatus"
+    post:
+      operationId: submitVerification
+      tags: [verification]
+      summary: Submit ID, selfie and liveness video
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubmitVerificationRequest"
+      responses:
+        "201":
+          description: Submitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VerificationStatus"
+  /admin/verifications:
+    get:
+      operationId: adminListVerifications
+      tags: [admin]
+      summary: Pending verification requests (admin)
+      responses:
+        "200":
+          description: Requests
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AdminVerification"
+  /admin/verifications/{requestId}:
+    post:
+      operationId: adminReviewVerification
+      tags: [admin]
+      summary: Approve or reject a verification (admin)
+      parameters:
+        - name: requestId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReviewVerificationRequest"
+      responses:
+        "200":
+          description: Updated request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminVerification"
+
 components:
+  parameters:
+    CompanionId:
+      name: companionId
+      in: path
+      required: true
+      schema:
+        type: string
+    ConnectionId:
+      name: connectionId
+      in: path
+      required: true
+      schema:
+        type: string
+    BookingId:
+      name: bookingId
+      in: path
+      required: true
+      schema:
+        type: string
+    StreamId:
+      name: streamId
+      in: path
+      required: true
+      schema:
+        type: string
+    LoungeId:
+      name: loungeId
+      in: path
+      required: true
+      schema:
+        type: string
+    PhotoId:
+      name: photoId
+      in: path
+      required: true
+      schema:
+        type: string
+  responses:
+    Error:
+      description: Error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
   schemas:
     HealthStatus:
       type: object
+      required: [status]
       properties:
         status:
           type: string
-      required:
-        - status
+    ErrorResponse:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+        code:
+          type: string
 
+    Role:
+      type: string
+      enum: [seeker, companion]
+    Gender:
+      type: string
+      enum: [female, male, other]
+    AvailabilityStatus:
+      type: string
+      enum: [now, tonight, offline]
+    ConnectionType:
+      type: string
+      enum: [standard, super, paidDm]
+    ConnectionStatus:
+      type: string
+      enum: [pending, accepted, declined]
+    BookingStatus:
+      type: string
+      enum: [pending, upcoming, active, completed, cancelled, declined]
+    VerificationState:
+      type: string
+      enum: [none, pending, approved, rejected]
+
+    PrivacyPrefs:
+      type: object
+      required: [showDistance, showOnline, allowSaves, hideFromSearch]
+      properties:
+        showDistance:
+          type: boolean
+        showOnline:
+          type: boolean
+        allowSaves:
+          type: boolean
+        hideFromSearch:
+          type: boolean
+    NotificationPrefs:
+      type: object
+      required: [messages, bookings, deals, live, radio]
+      properties:
+        messages:
+          type: boolean
+        bookings:
+          type: boolean
+        deals:
+          type: boolean
+        live:
+          type: boolean
+        radio:
+          type: boolean
+
+    Photo:
+      type: object
+      required: [id, url, isPrimary, createdAt]
+      properties:
+        id:
+          type: string
+        url:
+          type: string
+        isPrimary:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+
+    CompanionProfile:
+      type: object
+      required:
+        - vibes
+        - menu
+        - rate
+        - minBookingHours
+        - availabilityStatus
+        - isFeatured
+        - dealDiscount
+        - trustScore
+        - completedMeetups
+        - responseRate
+      properties:
+        vibes:
+          type: array
+          items:
+            type: string
+        menu:
+          type: array
+          items:
+            type: string
+        rate:
+          type: integer
+        minBookingHours:
+          type: integer
+        availabilityStatus:
+          $ref: "#/components/schemas/AvailabilityStatus"
+        isFeatured:
+          type: boolean
+        featuredUntil:
+          type: string
+          format: date-time
+          nullable: true
+        dealDiscount:
+          type: integer
+        dealExpiresAt:
+          type: string
+          format: date-time
+          nullable: true
+        trustScore:
+          type: integer
+        completedMeetups:
+          type: integer
+        responseRate:
+          type: integer
+
+    User:
+      type: object
+      required:
+        - id
+        - phone
+        - name
+        - bio
+        - role
+        - gender
+        - city
+        - avatarColor
+        - isLadiesMode
+        - ghostMode
+        - availableTonight
+        - verified
+        - verificationStatus
+        - trustedContact
+        - language
+        - privacy
+        - notificationPrefs
+        - loyaltyPoints
+        - referralCode
+        - isAdmin
+        - photos
+        - createdAt
+      properties:
+        id:
+          type: string
+        phone:
+          type: string
+        name:
+          type: string
+        bio:
+          type: string
+        role:
+          $ref: "#/components/schemas/Role"
+        gender:
+          $ref: "#/components/schemas/Gender"
+        age:
+          type: integer
+          nullable: true
+        city:
+          type: string
+        lat:
+          type: number
+          nullable: true
+        lng:
+          type: number
+          nullable: true
+        avatarColor:
+          type: string
+        isLadiesMode:
+          type: boolean
+        ghostMode:
+          type: boolean
+        availableTonight:
+          type: boolean
+        verified:
+          type: boolean
+        verificationStatus:
+          $ref: "#/components/schemas/VerificationState"
+        trustedContact:
+          type: string
+        language:
+          type: string
+        privacy:
+          $ref: "#/components/schemas/PrivacyPrefs"
+        notificationPrefs:
+          $ref: "#/components/schemas/NotificationPrefs"
+        loyaltyPoints:
+          type: integer
+        referralCode:
+          type: string
+        isAdmin:
+          type: boolean
+        companionProfile:
+          allOf:
+            - $ref: "#/components/schemas/CompanionProfile"
+          nullable: true
+        photos:
+          type: array
+          items:
+            $ref: "#/components/schemas/Photo"
+        createdAt:
+          type: string
+          format: date-time
+
+    AuthResponse:
+      type: object
+      required: [token, user]
+      properties:
+        token:
+          type: string
+        user:
+          $ref: "#/components/schemas/User"
+
+    RegisterRequest:
+      type: object
+      required: [phone, pin, name, role]
+      properties:
+        phone:
+          type: string
+          minLength: 9
+          maxLength: 20
+        pin:
+          type: string
+          pattern: "^[0-9]{4}$"
+        name:
+          type: string
+          minLength: 1
+          maxLength: 30
+        role:
+          $ref: "#/components/schemas/Role"
+        gender:
+          $ref: "#/components/schemas/Gender"
+        age:
+          type: integer
+          minimum: 18
+          maximum: 99
+        city:
+          type: string
+          maxLength: 40
+        referralCode:
+          type: string
+          maxLength: 20
+    LoginRequest:
+      type: object
+      required: [phone, pin]
+      properties:
+        phone:
+          type: string
+          minLength: 9
+          maxLength: 20
+        pin:
+          type: string
+          pattern: "^[0-9]{4}$"
+
+    UpdateMeRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 30
+        bio:
+          type: string
+          maxLength: 300
+        city:
+          type: string
+          maxLength: 40
+        lat:
+          type: number
+        lng:
+          type: number
+        role:
+          $ref: "#/components/schemas/Role"
+        gender:
+          $ref: "#/components/schemas/Gender"
+        age:
+          type: integer
+          minimum: 18
+          maximum: 99
+        isLadiesMode:
+          type: boolean
+        ghostMode:
+          type: boolean
+        availableTonight:
+          type: boolean
+        trustedContact:
+          type: string
+          maxLength: 30
+        language:
+          type: string
+          maxLength: 20
+        privacy:
+          $ref: "#/components/schemas/PrivacyPrefs"
+        notificationPrefs:
+          $ref: "#/components/schemas/NotificationPrefs"
+    UpdateCompanionProfileRequest:
+      type: object
+      properties:
+        vibes:
+          type: array
+          maxItems: 8
+          items:
+            type: string
+            maxLength: 30
+        menu:
+          type: array
+          maxItems: 12
+          items:
+            type: string
+            maxLength: 40
+        rate:
+          type: integer
+          minimum: 0
+          maximum: 10000000
+        minBookingHours:
+          type: integer
+          minimum: 1
+          maximum: 24
+        availabilityStatus:
+          $ref: "#/components/schemas/AvailabilityStatus"
+        dealDiscount:
+          type: integer
+          minimum: 0
+          maximum: 90
+        dealActive:
+          type: boolean
+    PresenceRequest:
+      type: object
+      properties:
+        lat:
+          type: number
+        lng:
+          type: number
+        city:
+          type: string
+          maxLength: 40
+    UploadPhotoRequest:
+      type: object
+      required: [dataBase64, contentType]
+      properties:
+        dataBase64:
+          type: string
+        contentType:
+          type: string
+          enum: [image/jpeg, image/png, image/webp]
+        isPrimary:
+          type: boolean
+
+    SwipeRequest:
+      type: object
+      required: [action]
+      properties:
+        action:
+          type: string
+          enum: [like, pass]
+    SwipeSummary:
+      type: object
+      required: [liked, passed]
+      properties:
+        liked:
+          type: array
+          items:
+            type: string
+        passed:
+          type: array
+          items:
+            type: string
+    SavedState:
+      type: object
+      required: [saved]
+      properties:
+        saved:
+          type: boolean
+
+    CompanionCard:
+      type: object
+      required:
+        - id
+        - name
+        - gender
+        - city
+        - bio
+        - avatarColor
+        - photoIndex
+        - verified
+        - online
+        - vibes
+        - menu
+        - rate
+        - minBookingHours
+        - availabilityStatus
+        - isSpotlight
+        - isTonightsDeal
+        - dealDiscount
+        - isNewInTown
+        - isHotStreak
+        - completedMeetups
+        - responseRate
+        - trustScore
+        - rating
+        - reviewCount
+        - isLiked
+        - isSaved
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        age:
+          type: integer
+          nullable: true
+        gender:
+          $ref: "#/components/schemas/Gender"
+        city:
+          type: string
+        bio:
+          type: string
+        avatarColor:
+          type: string
+        photoUrl:
+          type: string
+          nullable: true
+        photoIndex:
+          type: integer
+        verified:
+          type: boolean
+        online:
+          type: boolean
+        lastSeenAt:
+          type: string
+          format: date-time
+        distanceKm:
+          type: number
+          nullable: true
+        lat:
+          type: number
+          nullable: true
+        lng:
+          type: number
+          nullable: true
+        vibes:
+          type: array
+          items:
+            type: string
+        menu:
+          type: array
+          items:
+            type: string
+        rate:
+          type: integer
+        minBookingHours:
+          type: integer
+        availabilityStatus:
+          $ref: "#/components/schemas/AvailabilityStatus"
+        isSpotlight:
+          type: boolean
+        isTonightsDeal:
+          type: boolean
+        dealDiscount:
+          type: integer
+        isNewInTown:
+          type: boolean
+        isHotStreak:
+          type: boolean
+        completedMeetups:
+          type: integer
+        responseRate:
+          type: integer
+        trustScore:
+          type: integer
+        rating:
+          type: number
+        reviewCount:
+          type: integer
+        isLiked:
+          type: boolean
+        isSaved:
+          type: boolean
+        connectionId:
+          type: string
+          nullable: true
+    CompanionDetail:
+      allOf:
+        - $ref: "#/components/schemas/CompanionCard"
+        - type: object
+          required: [photos, recentReviews, verificationState]
+          properties:
+            photos:
+              type: array
+              items:
+                $ref: "#/components/schemas/Photo"
+            recentReviews:
+              type: array
+              items:
+                $ref: "#/components/schemas/Review"
+            verificationState:
+              $ref: "#/components/schemas/VerificationState"
+
+    PartySummary:
+      type: object
+      required: [id, name, avatarColor, role, city, online, verified]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        avatarColor:
+          type: string
+        photoUrl:
+          type: string
+          nullable: true
+        photoIndex:
+          type: integer
+        role:
+          $ref: "#/components/schemas/Role"
+        city:
+          type: string
+        online:
+          type: boolean
+        verified:
+          type: boolean
+        rate:
+          type: integer
+          nullable: true
+        availabilityStatus:
+          allOf:
+            - $ref: "#/components/schemas/AvailabilityStatus"
+          nullable: true
+
+    Story:
+      type: object
+      required: [id, companion, text, createdAt, expiresAt]
+      properties:
+        id:
+          type: string
+        companion:
+          $ref: "#/components/schemas/CompanionCard"
+        text:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+    PostStoryRequest:
+      type: object
+      required: [text]
+      properties:
+        text:
+          type: string
+          minLength: 1
+          maxLength: 140
+
+    ProfileView:
+      type: object
+      required: [id, hidden, viewerName, viewerColor, viewedAt]
+      properties:
+        id:
+          type: string
+        hidden:
+          type: boolean
+        viewerId:
+          type: string
+          nullable: true
+        viewerName:
+          type: string
+        viewerColor:
+          type: string
+        viewedAt:
+          type: string
+          format: date-time
+
+    Review:
+      type: object
+      required:
+        - id
+        - companionId
+        - reviewerName
+        - personality
+        - appearance
+        - punctuality
+        - service
+        - safety
+        - average
+        - text
+        - createdAt
+      properties:
+        id:
+          type: string
+        bookingId:
+          type: string
+          nullable: true
+        companionId:
+          type: string
+        reviewerName:
+          type: string
+        personality:
+          type: integer
+        appearance:
+          type: integer
+        punctuality:
+          type: integer
+        service:
+          type: integer
+        safety:
+          type: integer
+        average:
+          type: number
+        text:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+    CreateReviewRequest:
+      type: object
+      required: [companionId, personality, appearance, punctuality, service, safety]
+      properties:
+        companionId:
+          type: string
+        bookingId:
+          type: string
+        personality:
+          type: integer
+          minimum: 1
+          maximum: 5
+        appearance:
+          type: integer
+          minimum: 1
+          maximum: 5
+        punctuality:
+          type: integer
+          minimum: 1
+          maximum: 5
+        service:
+          type: integer
+          minimum: 1
+          maximum: 5
+        safety:
+          type: integer
+          minimum: 1
+          maximum: 5
+        text:
+          type: string
+          maxLength: 300
+    ReviewResult:
+      type: object
+      required: [review, pointsEarned]
+      properties:
+        review:
+          $ref: "#/components/schemas/Review"
+        pointsEarned:
+          type: integer
+
+    Connection:
+      type: object
+      required:
+        - id
+        - type
+        - status
+        - seekerId
+        - companionId
+        - isSeekerSide
+        - other
+        - lastMessage
+        - lastMessageAt
+        - unread
+        - createdAt
+      properties:
+        id:
+          type: string
+        type:
+          $ref: "#/components/schemas/ConnectionType"
+        status:
+          $ref: "#/components/schemas/ConnectionStatus"
+        seekerId:
+          type: string
+        companionId:
+          type: string
+        isSeekerSide:
+          type: boolean
+        other:
+          $ref: "#/components/schemas/PartySummary"
+        lastMessage:
+          type: string
+        lastMessageAt:
+          type: string
+          format: date-time
+        unread:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+    CreateConnectionRequest:
+      type: object
+      required: [companionId]
+      properties:
+        companionId:
+          type: string
+        type:
+          $ref: "#/components/schemas/ConnectionType"
+        message:
+          type: string
+          maxLength: 500
+    RespondConnectionRequest:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [accepted, declined]
+    Message:
+      type: object
+      required: [id, connectionId, senderId, fromMe, kind, text, createdAt]
+      properties:
+        id:
+          type: string
+        connectionId:
+          type: string
+        senderId:
+          type: string
+        fromMe:
+          type: boolean
+        kind:
+          type: string
+          enum: [text, voice, system]
+        text:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        readAt:
+          type: string
+          format: date-time
+          nullable: true
+    SendMessageRequest:
+      type: object
+      required: [text]
+      properties:
+        text:
+          type: string
+          minLength: 1
+          maxLength: 1000
+        kind:
+          type: string
+          enum: [text, voice]
+
+    Booking:
+      type: object
+      required:
+        - id
+        - seekerId
+        - companionId
+        - isSeekerSide
+        - other
+        - activity
+        - dateLabel
+        - hours
+        - rate
+        - total
+        - status
+        - city
+        - note
+        - meetupCode
+        - safetyActive
+        - rated
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+        connectionId:
+          type: string
+          nullable: true
+        seekerId:
+          type: string
+        companionId:
+          type: string
+        isSeekerSide:
+          type: boolean
+        other:
+          $ref: "#/components/schemas/PartySummary"
+        activity:
+          type: string
+        dateLabel:
+          type: string
+        scheduledFor:
+          type: string
+          format: date-time
+          nullable: true
+        hours:
+          type: integer
+        rate:
+          type: integer
+        total:
+          type: integer
+        status:
+          $ref: "#/components/schemas/BookingStatus"
+        city:
+          type: string
+        note:
+          type: string
+        meetupCode:
+          type: string
+        safetyActive:
+          type: boolean
+        rated:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+    CreateBookingRequest:
+      type: object
+      required: [companionId, activity, dateLabel, hours]
+      properties:
+        companionId:
+          type: string
+        activity:
+          type: string
+          minLength: 1
+          maxLength: 60
+        dateLabel:
+          type: string
+          minLength: 1
+          maxLength: 40
+        scheduledFor:
+          type: string
+          format: date-time
+        hours:
+          type: integer
+          minimum: 1
+          maximum: 24
+        note:
+          type: string
+          maxLength: 300
+    BookingActionRequest:
+      type: object
+      required: [action]
+      properties:
+        action:
+          type: string
+          enum: [accept, decline, cancel, start, complete]
+
+    Notification:
+      type: object
+      required: [id, type, title, body, read, createdAt]
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+        title:
+          type: string
+        body:
+          type: string
+        actionRoute:
+          type: string
+          nullable: true
+        actionLabel:
+          type: string
+          nullable: true
+        actor:
+          allOf:
+            - $ref: "#/components/schemas/PartySummary"
+          nullable: true
+        read:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+    MarkReadRequest:
+      type: object
+      properties:
+        ids:
+          type: array
+          items:
+            type: string
+    UnreadCounts:
+      type: object
+      required: [notifications, messages]
+      properties:
+        notifications:
+          type: integer
+        messages:
+          type: integer
+
+    PointsEntry:
+      type: object
+      required: [id, points, reason, label, createdAt]
+      properties:
+        id:
+          type: string
+        points:
+          type: integer
+        reason:
+          type: string
+        label:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+    ScoreSummary:
+      type: object
+      required: [points, tier, tierMin, ptsToNext, progress, loginStreak, activity]
+      properties:
+        points:
+          type: integer
+        tier:
+          type: string
+        tierMin:
+          type: integer
+        nextTier:
+          type: string
+          nullable: true
+        nextTierMin:
+          type: integer
+          nullable: true
+        ptsToNext:
+          type: integer
+        progress:
+          type: number
+        loginStreak:
+          type: integer
+        activity:
+          type: array
+          items:
+            $ref: "#/components/schemas/PointsEntry"
+
+    ReferralInvite:
+      type: object
+      required: [name, joinedAt, pointsAwarded]
+      properties:
+        name:
+          type: string
+        joinedAt:
+          type: string
+          format: date-time
+        pointsAwarded:
+          type: integer
+    ReferralSummary:
+      type: object
+      required: [code, link, inviteCount, pointsEarned, invites]
+      properties:
+        code:
+          type: string
+        link:
+          type: string
+        inviteCount:
+          type: integer
+        pointsEarned:
+          type: integer
+        invites:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReferralInvite"
+
+    TrustedContact:
+      type: object
+      required: [id, name, phone, relation, createdAt]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        phone:
+          type: string
+        relation:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+    TrustedContactRequest:
+      type: object
+      required: [name, phone]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 60
+        phone:
+          type: string
+          minLength: 7
+          maxLength: 25
+        relation:
+          type: string
+          maxLength: 40
+    SafetyEventRequest:
+      type: object
+      properties:
+        lat:
+          type: number
+        lng:
+          type: number
+        bookingId:
+          type: string
+        note:
+          type: string
+          maxLength: 300
+    IncidentRequest:
+      type: object
+      required: [description]
+      properties:
+        description:
+          type: string
+          minLength: 1
+          maxLength: 2000
+        bookingId:
+          type: string
+        lat:
+          type: number
+        lng:
+          type: number
+    SafetyEvent:
+      type: object
+      required: [id, type, note, contactsNotified, createdAt]
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          enum: [panic, checkin, incident, resolved]
+        bookingId:
+          type: string
+          nullable: true
+        lat:
+          type: number
+          nullable: true
+        lng:
+          type: number
+          nullable: true
+        note:
+          type: string
+        contactsNotified:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+
+    WalletEntry:
+      type: object
+      required: [id, amount, kind, status, reference, createdAt]
+      properties:
+        id:
+          type: string
+        amount:
+          type: integer
+        kind:
+          type: string
+        status:
+          type: string
+          enum: [pending, completed, failed]
+        reference:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+    WalletSummary:
+      type: object
+      required: [balance, totalEarnings, pendingPayout, totalSpent, paymentsEnabled, transactions]
+      properties:
+        balance:
+          type: integer
+        totalEarnings:
+          type: integer
+        pendingPayout:
+          type: integer
+        totalSpent:
+          type: integer
+        paymentsEnabled:
+          type: boolean
+        transactions:
+          type: array
+          items:
+            $ref: "#/components/schemas/WalletEntry"
+
+    Stream:
+      type: object
+      required: [id, host, title, description, status, viewerCount, heartCount, isHost, startedAt]
+      properties:
+        id:
+          type: string
+        host:
+          $ref: "#/components/schemas/PartySummary"
+        title:
+          type: string
+        description:
+          type: string
+        status:
+          type: string
+          enum: [live, ended]
+        viewerCount:
+          type: integer
+        heartCount:
+          type: integer
+        isHost:
+          type: boolean
+        startedAt:
+          type: string
+          format: date-time
+        endedAt:
+          type: string
+          format: date-time
+          nullable: true
+    StartStreamRequest:
+      type: object
+      required: [title]
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 60
+        description:
+          type: string
+          maxLength: 150
+    StreamComment:
+      type: object
+      required: [id, streamId, userName, userColor, fromMe, text, createdAt]
+      properties:
+        id:
+          type: string
+        streamId:
+          type: string
+        userName:
+          type: string
+        userColor:
+          type: string
+        fromMe:
+          type: boolean
+        text:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+    CommentRequest:
+      type: object
+      required: [text]
+      properties:
+        text:
+          type: string
+          minLength: 1
+          maxLength: 200
+
+    LoungeParticipant:
+      type: object
+      required: [initial, color]
+      properties:
+        initial:
+          type: string
+        color:
+          type: string
+    Lounge:
+      type: object
+      required: [id, name, city, topic, description, color, isLive, isFeatured, listenerCount, joined, isHost, participants, createdAt]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        city:
+          type: string
+        topic:
+          type: string
+        description:
+          type: string
+        color:
+          type: string
+        isLive:
+          type: boolean
+        isFeatured:
+          type: boolean
+        scheduledAt:
+          type: string
+          format: date-time
+          nullable: true
+        listenerCount:
+          type: integer
+        joined:
+          type: boolean
+        isHost:
+          type: boolean
+        participants:
+          type: array
+          items:
+            $ref: "#/components/schemas/LoungeParticipant"
+        createdAt:
+          type: string
+          format: date-time
+    CreateLoungeRequest:
+      type: object
+      required: [name, topic, city]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 60
+        topic:
+          type: string
+          minLength: 1
+          maxLength: 60
+        description:
+          type: string
+          maxLength: 200
+        city:
+          type: string
+          minLength: 1
+          maxLength: 40
+        color:
+          type: string
+          maxLength: 9
+
+    Weather:
+      type: object
+      required: [city, temperatureC, weatherCode, label, icon, tip, fetchedAt]
+      properties:
+        city:
+          type: string
+        temperatureC:
+          type: number
+        weatherCode:
+          type: integer
+        label:
+          type: string
+        icon:
+          type: string
+        tip:
+          type: string
+        fetchedAt:
+          type: string
+          format: date-time
+    OutageReport:
+      type: object
+      required: [id, city, area, status, createdAt]
+      properties:
+        id:
+          type: string
+        city:
+          type: string
+        area:
+          type: string
+        status:
+          type: string
+          enum: [out, warning, restored]
+        createdAt:
+          type: string
+          format: date-time
+    OutageRequest:
+      type: object
+      required: [city, area, status]
+      properties:
+        city:
+          type: string
+          minLength: 1
+          maxLength: 40
+        area:
+          type: string
+          minLength: 1
+          maxLength: 60
+        status:
+          type: string
+          enum: [out, warning, restored]
+
+    VerificationStatus:
+      type: object
+      required: [status]
+      properties:
+        status:
+          $ref: "#/components/schemas/VerificationState"
+        requestId:
+          type: string
+          nullable: true
+        submittedAt:
+          type: string
+          format: date-time
+          nullable: true
+        reviewedAt:
+          type: string
+          format: date-time
+          nullable: true
+        reviewNote:
+          type: string
+          nullable: true
+    SubmitVerificationRequest:
+      type: object
+      required: [idPhotoBase64, selfieBase64, code]
+      properties:
+        idPhotoBase64:
+          type: string
+        selfieBase64:
+          type: string
+        videoBase64:
+          type: string
+        code:
+          type: string
+          pattern: "^[0-9]{4}$"
+    AdminVerification:
+      type: object
+      required: [id, userId, userName, userPhone, status, code, idPhotoUrl, selfieUrl, reviewNote, createdAt]
+      properties:
+        id:
+          type: string
+        userId:
+          type: string
+        userName:
+          type: string
+        userPhone:
+          type: string
+        status:
+          type: string
+          enum: [pending, approved, rejected]
+        code:
+          type: string
+        idPhotoUrl:
+          type: string
+        selfieUrl:
+          type: string
+        videoUrl:
+          type: string
+          nullable: true
+        reviewNote:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        reviewedAt:
+          type: string
+          format: date-time
+          nullable: true
+    ReviewVerificationRequest:
+      type: object
+      required: [decision]
+      properties:
+        decision:
+          type: string
+          enum: [approve, reject]
+        note:
+          type: string
+          maxLength: 300

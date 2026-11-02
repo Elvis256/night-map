@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import React, { useState } from "react";
 import {
+  ActivityIndicator,
   FlatList,
   Platform,
   ScrollView,
@@ -12,19 +13,14 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@workspace/nightmap-design-system/hooks/use-colors";
-import { COMPANIONS, Companion, Match, useApp } from "@/context/AppContext";
+import { AppStory, Companion, Match, relativeTime, useApp } from "@/context/AppContext";
 import { ChemistryModal } from "@/components/ChemistryModal";
 
 type Tab = "connections" | "favorites" | "stories";
 
-const STORY_DATA = COMPANIONS.filter((c) => c.availabilityStatus !== "offline").map((c, i) => ({
-  companion: c,
-  postedAgo: `${i * 23 + 12}m ago`,
-  preview: ["Available tonight 🌙", "Just went online ✨", "New photos added 📷", "Tonight's deal active ⚡"][i % 4],
-}));
-
 function MatchRow({ match, onRate }: { match: Match; onRate: () => void }) {
   const colors = useColors("dark");
+  const isSystem = !match.lastMessage || match.lastMessage.startsWith("📅") || match.lastMessage.startsWith("✅") || match.lastMessage.startsWith("🏁");
   return (
     <TouchableOpacity
       style={[styles.row, { borderBottomColor: colors.border }]}
@@ -47,23 +43,30 @@ function MatchRow({ match, onRate }: { match: Match; onRate: () => void }) {
                 <Text style={[styles.typeText, { color: "#FF8A3D" }]}>Super</Text>
               </View>
             )}
+            {match.status === "pending" && !match.isSeekerSide && (
+              <View style={[styles.typePill, { backgroundColor: "rgba(61,169,255,0.15)" }]}>
+                <Text style={[styles.typeText, { color: "#3DA9FF" }]}>New request</Text>
+              </View>
+            )}
           </View>
           <Text style={[styles.rowTime, { color: colors.mutedForeground }]}>{formatTime(match.lastMessageTime)}</Text>
         </View>
         <View style={styles.rowBottom}>
           <Text
-            style={[styles.rowMessage, { color: match.unread > 0 ? colors.foreground : colors.mutedForeground }]}
+            style={[styles.rowMessage, { color: match.unread > 0 ? colors.foreground : colors.mutedForeground, fontStyle: isSystem ? "italic" : "normal" }]}
             numberOfLines={1}
           >
-            {match.lastMessage.startsWith("🎤") ? "🎤 Voice note" : match.lastMessage}
+            {match.lastMessage.startsWith("🎤") ? "🎤 Voice note" : match.lastMessage || "Say hello 👋"}
           </Text>
-          <TouchableOpacity
-            style={[styles.rateBtn, { backgroundColor: "rgba(122,60,255,0.1)", borderColor: "rgba(122,60,255,0.3)" }]}
-            onPress={(e) => { e.stopPropagation(); onRate(); }}
-          >
-            <Ionicons name="flask-outline" size={11} color="#7A3CFF" />
-            <Text style={[styles.rateBtnText, { color: "#7A3CFF" }]}>Rate</Text>
-          </TouchableOpacity>
+          {match.isSeekerSide && (
+            <TouchableOpacity
+              style={[styles.rateBtn, { backgroundColor: "rgba(122,60,255,0.1)", borderColor: "rgba(122,60,255,0.3)" }]}
+              onPress={(e) => { e.stopPropagation(); onRate(); }}
+            >
+              <Ionicons name="flask-outline" size={11} color="#7A3CFF" />
+              <Text style={[styles.rateBtnText, { color: "#7A3CFF" }]}>Rate</Text>
+            </TouchableOpacity>
+          )}
           {match.unread > 0 && (
             <View style={[styles.unreadBadge, { backgroundColor: colors.primary }]}>
               <Text style={styles.unreadText}>{match.unread}</Text>
@@ -101,9 +104,9 @@ function FavoriteCard({ companion }: { companion: Companion }) {
   );
 }
 
-function StoryRow({ item }: { item: typeof STORY_DATA[number] }) {
+function StoryRow({ story }: { story: AppStory }) {
   const colors = useColors("dark");
-  const c = item.companion;
+  const c = story.companion;
   return (
     <TouchableOpacity
       style={[styles.storyRow, { borderBottomColor: colors.border }]}
@@ -118,9 +121,9 @@ function StoryRow({ item }: { item: typeof STORY_DATA[number] }) {
       <View style={styles.storyInfo}>
         <View style={styles.storyTopRow}>
           <Text style={[styles.storyName, { color: colors.foreground }]}>{c.name}</Text>
-          <Text style={[styles.storyTime, { color: colors.mutedForeground }]}>{item.postedAgo}</Text>
+          <Text style={[styles.storyTime, { color: colors.mutedForeground }]}>{relativeTime(story.createdAt)}</Text>
         </View>
-        <Text style={[styles.storyPreview, { color: colors.mutedForeground }]}>{item.preview}</Text>
+        <Text style={[styles.storyPreview, { color: colors.mutedForeground }]} numberOfLines={1}>{story.text}</Text>
       </View>
       {c.availabilityStatus === "now" && (
         <View style={[styles.liveTag, { backgroundColor: "rgba(34,197,94,0.15)", borderColor: "rgba(34,197,94,0.35)" }]}>
@@ -144,24 +147,22 @@ function formatTime(date: Date): string {
 export default function MatchesScreen() {
   const colors = useColors("dark");
   const insets = useSafeAreaInsets();
-  const { matches, savedIds } = useApp();
+  const { matches, matchesLoading, savedCompanions, stories, userProfile } = useApp();
   const [tab, setTab] = useState<Tab>("connections");
   const [ratingMatch, setRatingMatch] = useState<Match | null>(null);
-
-  const favorites = COMPANIONS.filter((c) => savedIds.has(c.id));
+  const totalUnread = matches.reduce((s, m) => s + m.unread, 0);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
       <View style={[styles.header, { paddingTop: Platform.OS === "web" ? 67 : insets.top }]}>
         <Text style={[styles.headerTitle, { color: colors.foreground }]}>Inbox</Text>
-        {matches.length > 0 && (
+        {totalUnread > 0 && (
           <View style={[styles.countBadge, { backgroundColor: "rgba(255,78,98,0.15)" }]}>
-            <Text style={[styles.countText, { color: colors.primary }]}>{matches.length}</Text>
+            <Text style={[styles.countText, { color: colors.primary }]}>{totalUnread} new</Text>
           </View>
         )}
       </View>
-
       {/* Tab bar */}
       <View style={[styles.tabBar, { borderBottomColor: colors.border }]}>
         {(["connections", "favorites", "stories"] as Tab[]).map((t) => (
@@ -171,32 +172,35 @@ export default function MatchesScreen() {
             onPress={() => setTab(t)}
           >
             <Text style={[styles.tabLabel, { color: tab === t ? colors.primary : colors.mutedForeground }]}>
-              {t === "connections" ? "Connections" : t === "favorites" ? "Saved" : "Stories"}
+              {t === "connections" ? (userProfile.isCompanion ? "Clients" : "Connections") : t === "favorites" ? "Saved" : "Stories"}
             </Text>
             {t === "connections" && matches.length > 0 && (
               <View style={[styles.tabCount, { backgroundColor: colors.primary }]}>
                 <Text style={styles.tabCountText}>{matches.length}</Text>
               </View>
             )}
-            {t === "stories" && (
+            {t === "stories" && stories.length > 0 && (
               <View style={[styles.tabCount, { backgroundColor: colors.accent }]}>
-                <Text style={styles.tabCountText}>{STORY_DATA.length}</Text>
+                <Text style={styles.tabCountText}>{stories.length}</Text>
               </View>
             )}
           </TouchableOpacity>
         ))}
       </View>
-
       {/* Tab content */}
       {tab === "connections" && (
-        matches.length === 0 ? (
+        matchesLoading && matches.length === 0 ? (
+          <View style={styles.empty}>
+            <ActivityIndicator color={colors.primary} />
+          </View>
+        ) : matches.length === 0 ? (
           <View style={styles.empty}>
             <View style={[styles.emptyIcon, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <Ionicons name="heart-outline" size={36} color={colors.mutedForeground} />
             </View>
             <Text style={[styles.emptyTitle, { color: colors.foreground }]}>No connections yet</Text>
             <Text style={[styles.emptySubtitle, { color: colors.mutedForeground }]}>
-              Swipe right or connect from the map to start
+              {userProfile.isCompanion ? "Client requests will appear here" : "Swipe right or connect from the map to start"}
             </Text>
           </View>
         ) : (
@@ -208,7 +212,6 @@ export default function MatchesScreen() {
           />
         )
       )}
-
       {tab === "favorites" && (
         <ScrollView contentContainerStyle={[styles.favScrollContent, { paddingBottom: Platform.OS === "web" ? 34 : insets.bottom + 16 }]}>
           <View style={[styles.favNotice, { backgroundColor: "rgba(255,138,61,0.08)", borderColor: "rgba(255,138,61,0.2)" }]}>
@@ -218,7 +221,7 @@ export default function MatchesScreen() {
             </Text>
           </View>
           <View style={styles.favGrid}>
-            {favorites.map((c) => (
+            {savedCompanions.map((c) => (
               <FavoriteCard key={c.id} companion={c} />
             ))}
             <TouchableOpacity
@@ -226,24 +229,33 @@ export default function MatchesScreen() {
               onPress={() => router.push("/discover")}
             >
               <Ionicons name="add-circle-outline" size={30} color={colors.mutedForeground} />
-              <Text style={[styles.favAddText, { color: colors.mutedForeground }]}>Find more</Text>
+              <Text style={[styles.favAddText, { color: colors.mutedForeground }]}>{savedCompanions.length === 0 ? "Save companions" : "Find more"}</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
       )}
-
       {tab === "stories" && (
-        <FlatList
-          data={STORY_DATA}
-          keyExtractor={(item) => item.companion.id}
-          renderItem={({ item }) => <StoryRow item={item} />}
-          contentContainerStyle={{ paddingBottom: Platform.OS === "web" ? 34 : insets.bottom }}
-        />
+        stories.length === 0 ? (
+          <View style={styles.empty}>
+            <View style={[styles.emptyIcon, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <Ionicons name="sparkles-outline" size={36} color={colors.mutedForeground} />
+            </View>
+            <Text style={[styles.emptyTitle, { color: colors.foreground }]}>No stories right now</Text>
+            <Text style={[styles.emptySubtitle, { color: colors.mutedForeground }]}>Companions post updates when they go live for the night</Text>
+          </View>
+        ) : (
+          <FlatList
+            data={stories}
+            keyExtractor={(item) => item.id}
+            renderItem={({ item }) => <StoryRow story={item} />}
+            contentContainerStyle={{ paddingBottom: Platform.OS === "web" ? 34 : insets.bottom }}
+          />
+        )
       )}
-
       {ratingMatch && (
         <ChemistryModal
           visible={!!ratingMatch}
+          companionId={ratingMatch.companion.id}
           companionName={ratingMatch.companion.name}
           companionColor={ratingMatch.companion.color}
           onClose={() => setRatingMatch(null)}

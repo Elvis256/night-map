@@ -1,9 +1,10 @@
-import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import * as Location from "expo-location";
 import { router } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   Animated,
   Platform,
   Pressable,
@@ -14,43 +15,55 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import {
+  getGetCityWeatherQueryKey,
+  getListOutagesQueryKey,
+  useGetCityWeather,
+  useListOutages,
+} from "@workspace/api-client-react";
 import { useColors } from "@workspace/nightmap-design-system/hooks/use-colors";
 import { Companion, useApp } from "@/context/AppContext";
-
 import { TrustBadge } from "@workspace/nightmap-design-system/components/native/TrustBadge";
 import { FilterModal } from "@/components/FilterModal";
+import { CITY_COORDS, nearestCity } from "@/hooks/useLocationCity";
 
 const CITIES = ["Kampala", "Entebbe", "Mbarara", "Gulu", "Jinja", "Nairobi", "Dar es Salaam", "Dubai"];
-
-const CITY_COORDS: Record<string, { lat: number; lng: number }> = {
-  Kampala:        { lat:  0.3476, lng: 32.5825 },
-  Entebbe:        { lat:  0.0512, lng: 32.4637 },
-  Mbarara:        { lat: -0.6073, lng: 30.6573 },
-  Gulu:           { lat:  2.7748, lng: 32.2991 },
-  Jinja:          { lat:  0.4478, lng: 33.2026 },
-  Nairobi:        { lat: -1.2921, lng: 36.8219 },
-  "Dar es Salaam":{ lat: -6.7924, lng: 39.2083 },
-  Dubai:          { lat: 25.2048, lng: 55.2708 },
-};
-
-function nearestCity(lat: number, lng: number): string {
-  let best = "Kampala";
-  let bestDist = Infinity;
-  for (const [city, coords] of Object.entries(CITY_COORDS)) {
-    const dLat = (coords.lat - lat) * (Math.PI / 180);
-    const dLng = (coords.lng - lng) * (Math.PI / 180);
-    const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat * (Math.PI / 180)) * Math.cos(coords.lat * (Math.PI / 180)) * Math.sin(dLng / 2) ** 2;
-    const dist = 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    if (dist < bestDist) { bestDist = dist; best = city; }
-  }
-  return best;
-}
 
 const STATUS_COLOR: Record<string, string> = {
   now: "#22c55e",
   tonight: "#FF8A3D",
   offline: "#6b6b8a",
 };
+
+const PIN_BOX_DEG = 0.03;
+
+function clampPct(v: number): number {
+  return Math.max(6, Math.min(90, v));
+}
+
+function hashString(s: string): number {
+  let h = 0;
+  for (const ch of s) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return h;
+}
+
+/** Pin position inside the map box from real coordinates, or a stable hashed spread. */
+function pinPosition(c: Companion, city: string, index: number): { x: number; y: number } {
+  const centre = CITY_COORDS[city] ?? CITY_COORDS[c.city];
+  if (c.lat != null && c.lng != null && centre) {
+    const x = ((c.lng - centre.lng) / PIN_BOX_DEG) * 42 + 50;
+    const y = ((centre.lat - c.lat) / PIN_BOX_DEG) * 42 + 50;
+    if (Math.abs(x - 50) <= 60 && Math.abs(y - 50) <= 60) {
+      return { x: clampPct(x), y: clampPct(y) };
+    }
+  }
+  return { x: 10 + ((index * 47 + 23) % 80), y: 8 + ((index * 61 + 15) % 84) };
+}
+
+function outagePosition(area: string): { x: number; y: number } {
+  const h = hashString(area);
+  return { x: 10 + (h % 75), y: 10 + ((h >>> 8) % 70) };
+}
 
 function MapPinView({
   companion,
@@ -65,7 +78,6 @@ function MapPinView({
 }) {
   const colors = useColors("dark");
   const dotColor = STATUS_COLOR[companion.availabilityStatus];
-
   return (
     <TouchableOpacity
       style={[
@@ -93,7 +105,7 @@ function MapPinView({
   );
 }
 
-function BadgeRow({ companion, colors }: { companion: Companion; colors: ReturnType<typeof useColors> }) {
+function BadgeRow({ companion }: { companion: Companion }) {
   return (
     <View style={styles.badgeRow}>
       {companion.isHotStreak && (
@@ -131,13 +143,13 @@ function CompanionPinCard({ companion, onClose, colors }: { companion: Companion
       </View>
       <View style={styles.pinCardInfo}>
         <View style={styles.pinNameRow}>
-          <Text style={[styles.pinCardName, { color: colors.foreground }]}>{companion.name}, {companion.age}</Text>
+          <Text style={[styles.pinCardName, { color: colors.foreground }]}>{companion.name}{companion.age ? `, ${companion.age}` : ""}</Text>
           {companion.isSpotlight && <Ionicons name="star" size={12} color="#FF8A3D" />}
         </View>
         <Text style={[styles.pinCardDist, { color: colors.mutedForeground }]}>
-          {companion.distance} km · UGX {(companion.rate / 1000).toFixed(0)}k/hr
+          {companion.distance != null ? `${companion.distance} km` : companion.city} · UGX {(companion.rate / 1000).toFixed(0)}k/hr
         </Text>
-        <BadgeRow companion={companion} colors={colors} />
+        <BadgeRow companion={companion} />
       </View>
       <View style={styles.pinCardRight}>
         <TrustBadge score={companion.trustScore} size="sm" />
@@ -147,26 +159,21 @@ function CompanionPinCard({ companion, onClose, colors }: { companion: Companion
   );
 }
 
-const WEATHER_DATA = {
-  Kampala: { icon: "🌦️", label: "Scattered showers · 22°C", tip: "Indoor venues recommended tonight", color: "#3DA9FF" },
-  Nairobi: { icon: "⛅", label: "Partly cloudy · 19°C", tip: "Good evening for rooftop bars", color: "#FF8A3D" },
-  "Dar es Salaam": { icon: "🌙", label: "Clear · 28°C", tip: "Perfect beach night", color: "#1FBF6B" },
-  Entebbe: { icon: "🌧️", label: "Heavy rain · 21°C", tip: "Stay indoors — great night for dinner", color: "#3DA9FF" },
-  default: { icon: "⛅", label: "Partly cloudy · 24°C", tip: "Nice evening ahead", color: "#FF8A3D" },
-};
-
-const POWER_ZONES = [
-  { x: 18, y: 22, label: "Ntinda", status: "out" as const },
-  { x: 62, y: 44, label: "Kabalagala", status: "warning" as const },
-  { x: 80, y: 18, label: "Mukono", status: "out" as const },
-  { x: 38, y: 68, label: "Entebbe Rd", status: "warning" as const },
-];
-
 export default function MapScreen() {
   const colors = useColors("dark");
   const insets = useSafeAreaInsets();
-  const { filteredCompanions, userProfile, updateProfile, filters, setUserCity } = useApp();
-  const [selectedCity, setSelectedCity] = useState("Kampala");
+  const {
+    filteredCompanions,
+    companionsLoading,
+    userProfile,
+    updateProfile,
+    filters,
+    setUserCity,
+    browseCity,
+    setBrowseCity,
+    unread,
+    serverError,
+  } = useApp();
   const [locating, setLocating] = useState(true);
   const [locationDenied, setLocationDenied] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -176,6 +183,7 @@ export default function MapScreen() {
   const [showPowerCut, setShowPowerCut] = useState(false);
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const dealPulse = useRef(new Animated.Value(1)).current;
+  const selectedCity = browseCity || "Kampala";
 
   useEffect(() => {
     let cancelled = false;
@@ -189,8 +197,8 @@ export default function MapScreen() {
         const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
         if (!cancelled) {
           const city = nearestCity(pos.coords.latitude, pos.coords.longitude);
-          setSelectedCity(city);
           setUserCity(city);
+          setBrowseCity(city);
           setLocating(false);
         }
       } catch {
@@ -200,13 +208,24 @@ export default function MapScreen() {
     return () => { cancelled = true; };
   }, []);
 
-  const weather = (WEATHER_DATA as Record<string, typeof WEATHER_DATA.default>)[selectedCity] ?? WEATHER_DATA.default;
+  const weatherQuery = useGetCityWeather(selectedCity, {
+    query: { queryKey: getGetCityWeatherQueryKey(selectedCity), enabled: showWeather, staleTime: 600000 },
+  });
+  const outagesQuery = useListOutages({ city: selectedCity }, {
+    query: { queryKey: getListOutagesQueryKey({ city: selectedCity }), enabled: showPowerCut, staleTime: 60000 },
+  });
+
+  const weather = weatherQuery.data
+    ? { icon: weatherQuery.data.icon, label: weatherQuery.data.label, tip: weatherQuery.data.tip, color: "#3DA9FF" }
+    : weatherQuery.isError
+      ? { icon: "⛅", label: "Weather unavailable", tip: "Could not reach the weather service", color: "#AAB3C5" }
+      : { icon: "⛅", label: "Loading weather…", tip: "", color: "#AAB3C5" };
+  const outages = outagesQuery.data ?? [];
 
   const companions = filteredCompanions(userProfile.isLadiesMode);
   const onlineNow = companions.filter((c) => c.availabilityStatus === "now").length;
   const trending = [...companions].sort((a, b) => b.completedMeetups - a.completedMeetups).slice(0, 4);
   const selectedCompanion = companions.find((c) => c.id === selectedId) ?? null;
-
   const activeFilterCount = [
     filters.maxDistance < 50,
     filters.minRating > 0,
@@ -254,7 +273,6 @@ export default function MapScreen() {
           )}
           <Ionicons name="chevron-down" size={13} color={colors.mutedForeground} />
         </TouchableOpacity>
-
         <View style={styles.headerRight}>
           {userProfile.ghostMode && (
             <View style={[styles.ghostChip, { backgroundColor: "rgba(107,107,138,0.2)" }]}>
@@ -280,9 +298,11 @@ export default function MapScreen() {
             onPress={() => router.push("/notifications")}
           >
             <Ionicons name="notifications-outline" size={17} color={colors.foreground} />
-            <View style={[styles.bellBadge, { backgroundColor: colors.primary }]}>
-              <Text style={styles.bellBadgeText}>4</Text>
-            </View>
+            {unread.notifications > 0 && (
+              <View style={[styles.bellBadge, { backgroundColor: colors.primary }]}>
+                <Text style={styles.bellBadgeText}>{unread.notifications > 9 ? "9+" : unread.notifications}</Text>
+              </View>
+            )}
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.filterBtn, { backgroundColor: activeFilterCount > 0 ? "rgba(255,78,98,0.15)" : colors.card, borderColor: activeFilterCount > 0 ? colors.primary : colors.border }]}
@@ -297,7 +317,6 @@ export default function MapScreen() {
           </TouchableOpacity>
         </View>
       </View>
-
       {/* City picker */}
       {showCityPicker && (
         <View style={[styles.cityPicker, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -305,14 +324,20 @@ export default function MapScreen() {
             <TouchableOpacity
               key={city}
               style={[styles.cityOption, selectedCity === city && { backgroundColor: colors.muted }]}
-              onPress={() => { setSelectedCity(city); setShowCityPicker(false); }}
+              onPress={() => { setBrowseCity(city); setSelectedId(null); setShowCityPicker(false); }}
             >
               <Text style={[styles.cityOptionText, { color: selectedCity === city ? colors.primary : colors.foreground }]}>{city}</Text>
             </TouchableOpacity>
           ))}
         </View>
       )}
-
+      {/* Server banner */}
+      {serverError && (
+        <View style={[styles.ladiesBanner, { backgroundColor: "rgba(255,138,61,0.12)", borderColor: "rgba(255,138,61,0.3)" }]}>
+          <Ionicons name="cloud-offline-outline" size={14} color="#FF8A3D" />
+          <Text style={[styles.ladiesBannerText, { color: "#FF8A3D" }]}>{serverError}</Text>
+        </View>
+      )}
       {/* Ladies Mode banner */}
       {userProfile.isLadiesMode && (
         <View style={[styles.ladiesBanner, { backgroundColor: "rgba(33,150,243,0.12)", borderColor: "rgba(33,150,243,0.3)" }]}>
@@ -320,7 +345,6 @@ export default function MapScreen() {
           <Text style={[styles.ladiesBannerText, { color: "#2196f3" }]}>Ladies Mode — showing Gentleman Companions only</Text>
         </View>
       )}
-
       {/* Map */}
       <View style={[styles.mapArea, { backgroundColor: "#0a0f1a" }]}>
         {/* Grid lines */}
@@ -332,11 +356,9 @@ export default function MapScreen() {
             <View key={`v${pos}`} style={[styles.gridLine, styles.gridLineV, { left: `${pos * 100}%`, backgroundColor: "rgba(44,40,69,0.4)" }]} />
           ))}
         </View>
-
         {/* Companion pins */}
         {companions.map((c, i) => {
-          const x = 10 + ((i * 47 + 23) % 80);
-          const y = 8 + ((i * 61 + 15) % 84);
+          const { x, y } = pinPosition(c, selectedCity, i);
           return (
             <View key={c.id} style={{ position: "absolute", left: `${x}%`, top: `${y}%` } as never}>
               <MapPinView
@@ -351,7 +373,21 @@ export default function MapScreen() {
             </View>
           );
         })}
-
+        {/* Loading / empty */}
+        {companionsLoading && companions.length === 0 && (
+          <View style={styles.mapEmpty} pointerEvents="none">
+            <ActivityIndicator color={colors.primary} />
+            <Text style={[styles.mapEmptyText, { color: colors.mutedForeground }]}>Finding companions near {selectedCity}…</Text>
+          </View>
+        )}
+        {!companionsLoading && companions.length === 0 && (
+          <View style={styles.mapEmpty} pointerEvents="none">
+            <Text style={styles.mapEmptyEmoji}>🌙</Text>
+            <Text style={[styles.mapEmptyText, { color: colors.mutedForeground }]}>
+              No companions in {selectedCity} match your filters yet. Try another city or reset filters.
+            </Text>
+          </View>
+        )}
         {/* Map legend */}
         <View style={[styles.legend, { backgroundColor: "rgba(8,8,16,0.85)" }]}>
           {[
@@ -365,7 +401,6 @@ export default function MapScreen() {
             </View>
           ))}
         </View>
-
         {/* Ghost Mode toggle */}
         <TouchableOpacity
           style={[styles.ghostToggle, {
@@ -374,7 +409,7 @@ export default function MapScreen() {
           }]}
           onPress={() => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            updateProfile({ ghostMode: !userProfile.ghostMode });
+            updateProfile({ ghostMode: !userProfile.ghostMode }).catch(() => {});
           }}
         >
           <Ionicons name={userProfile.ghostMode ? "eye-off" : "eye"} size={16} color={userProfile.ghostMode ? colors.mutedForeground : "#fff"} />
@@ -382,7 +417,6 @@ export default function MapScreen() {
             {userProfile.ghostMode ? "Ghost On" : "Ghost Mode"}
           </Text>
         </TouchableOpacity>
-
         {/* Overlay toggles */}
         <View style={styles.overlayToggles}>
           <TouchableOpacity
@@ -398,49 +432,54 @@ export default function MapScreen() {
             <Ionicons name={showPowerCut ? "flash" : "flash-outline"} size={15} color={showPowerCut ? "#FFC107" : "rgba(255,255,255,0.6)"} />
           </TouchableOpacity>
         </View>
-
-        {/* Power cut zone markers */}
-        {showPowerCut && POWER_ZONES.map((z) => (
-          <View
-            key={z.label}
-            style={[
-              styles.powerZone,
-              {
-                left: `${z.x}%`,
-                top: `${z.y}%`,
-                backgroundColor: z.status === "out" ? "rgba(239,68,68,0.18)" : "rgba(255,193,7,0.14)",
-                borderColor: z.status === "out" ? "rgba(239,68,68,0.5)" : "rgba(255,193,7,0.5)",
-              },
-            ] as never}
-            pointerEvents="none"
-          >
-            <Ionicons name={z.status === "out" ? "flash-off" : "flash"} size={9} color={z.status === "out" ? "#ef4444" : "#FFC107"} />
-            <Text style={[styles.powerZoneText, { color: z.status === "out" ? "#ef4444" : "#FFC107" }]}>{z.label}</Text>
+        {/* Power cut zone markers (community reports) */}
+        {showPowerCut && outages.map((z) => {
+          const { x, y } = outagePosition(z.area);
+          return (
+            <View
+              key={z.id}
+              style={[
+                styles.powerZone,
+                {
+                  left: `${x}%`,
+                  top: `${y}%`,
+                  backgroundColor: z.status === "out" ? "rgba(239,68,68,0.18)" : "rgba(255,193,7,0.14)",
+                  borderColor: z.status === "out" ? "rgba(239,68,68,0.5)" : "rgba(255,193,7,0.5)",
+                },
+              ] as never}
+              pointerEvents="none"
+            >
+              <Ionicons name={z.status === "out" ? "flash-off" : "flash"} size={9} color={z.status === "out" ? "#ef4444" : "#FFC107"} />
+              <Text style={[styles.powerZoneText, { color: z.status === "out" ? "#ef4444" : "#FFC107" }]}>{z.area}</Text>
+            </View>
+          );
+        })}
+        {showPowerCut && !outagesQuery.isLoading && outages.length === 0 && (
+          <View style={[styles.powerZone, { left: "28%", top: "46%", backgroundColor: "rgba(34,197,94,0.14)", borderColor: "rgba(34,197,94,0.5)" }] as never} pointerEvents="none">
+            <Ionicons name="flash" size={9} color="#22c55e" />
+            <Text style={[styles.powerZoneText, { color: "#22c55e" }]}>No outages reported in {selectedCity}</Text>
           </View>
-        ))}
+        )}
       </View>
-
       {/* Weather banner */}
       {showWeather && (
         <View style={[styles.weatherBanner, { backgroundColor: `${weather.color}18`, borderColor: `${weather.color}40` }]}>
           <Text style={styles.weatherIcon}>{weather.icon}</Text>
           <View style={styles.weatherInfo}>
             <Text style={[styles.weatherLabel, { color: weather.color }]}>{selectedCity} — {weather.label}</Text>
-            <Text style={[styles.weatherTip, { color: colors.mutedForeground }]}>{weather.tip}</Text>
+            {!!weather.tip && <Text style={[styles.weatherTip, { color: colors.mutedForeground }]}>{weather.tip}</Text>}
           </View>
           <TouchableOpacity onPress={() => setShowWeather(false)}>
             <Ionicons name="close" size={16} color={colors.mutedForeground} />
           </TouchableOpacity>
         </View>
       )}
-
       {/* Selected pin card */}
       {selectedCompanion && (
         <View style={styles.pinCardContainer}>
           <CompanionPinCard companion={selectedCompanion} onClose={() => setSelectedId(null)} colors={colors} />
         </View>
       )}
-
       {/* Bottom section */}
       <View style={[styles.bottomSection, { backgroundColor: colors.background, borderTopColor: colors.border }]}>
         {/* Radio FAB */}
@@ -451,7 +490,6 @@ export default function MapScreen() {
           <Ionicons name="radio-outline" size={17} color="#7A3CFF" />
           <Text style={[styles.radioFabText, { color: "#7A3CFF" }]}>Radio</Text>
         </TouchableOpacity>
-
         {/* Trending Tonight */}
         <View style={styles.trendingSection}>
           <View style={styles.trendingHeader}>
@@ -459,6 +497,11 @@ export default function MapScreen() {
             <Text style={[styles.trendingTitle, { color: colors.foreground }]}>Trending Tonight</Text>
           </View>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.trendingScroll}>
+            {trending.length === 0 && (
+              <Text style={[styles.trendingMeetups, { color: colors.mutedForeground, paddingVertical: 12 }]}>
+                {companionsLoading ? "Loading…" : "Nobody trending here yet"}
+              </Text>
+            )}
             {trending.map((c, i) => (
               <TouchableOpacity
                 key={c.id}
@@ -479,13 +522,21 @@ export default function MapScreen() {
           </ScrollView>
         </View>
       </View>
-
       <FilterModal visible={showFilters} onClose={() => setShowFilters(false)} />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  mapEmpty: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 40,
+    gap: 10,
+  },
+  mapEmptyEmoji: { fontSize: 36 },
+  mapEmptyText: { fontFamily: "Inter_400Regular", fontSize: 13, textAlign: "center", lineHeight: 19 },
   container: { flex: 1 },
   header: {
     flexDirection: "row",

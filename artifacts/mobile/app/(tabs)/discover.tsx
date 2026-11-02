@@ -1,8 +1,9 @@
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   Animated,
   Image,
   Modal,
@@ -17,7 +18,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@workspace/nightmap-design-system/hooks/use-colors";
-import { COMPANIONS, Companion, useApp } from "@/context/AppContext";
+import { AppStory, Companion, relativeTime, useApp } from "@/context/AppContext";
 import { BookingModal } from "@/components/BookingModal";
 import { TrustBadge } from "@workspace/nightmap-design-system/components/native/TrustBadge";
 
@@ -26,6 +27,10 @@ const COMPANION_PHOTOS = [
   require("@/assets/images/companion2.png"),
   require("@/assets/images/companion3.png"),
 ];
+
+function photoSource(companion: Companion) {
+  return companion.photoUrl ? { uri: companion.photoUrl } : COMPANION_PHOTOS[companion.photoIndex % 3];
+}
 
 const CATEGORIES = [
   {
@@ -93,11 +98,13 @@ const CATEGORIES = [
     border: "rgba(255,138,61,0.35)",
   },
 ] as const;
-
 type CategoryValue = typeof CATEGORIES[number]["value"];
-
-const STORY_COMPANIONS = COMPANIONS.filter((c) => c.availabilityStatus !== "offline").slice(0, 7);
 const SWIPE_THRESHOLD = 100;
+
+function matchesCategory(c: Companion, value: CategoryValue): boolean {
+  if (!value) return true;
+  return c.menu.includes(value) || c.vibes.includes(value);
+}
 
 function StoryCircle({ companion, onPress, isNew }: { companion: Companion; onPress: () => void; isNew?: boolean }) {
   const colors = useColors("dark");
@@ -134,11 +141,11 @@ function StoryCircle({ companion, onPress, isNew }: { companion: Companion; onPr
   );
 }
 
-function StoryViewer({ companion, onClose }: { companion: Companion; onClose: () => void }) {
-  const colors = useColors("dark");
+function StoryViewer({ story, onClose }: { story: AppStory; onClose: () => void }) {
+  const companion = story.companion;
   const progressAnim = useRef(new Animated.Value(0)).current;
   React.useEffect(() => {
-    Animated.timing(progressAnim, { toValue: 1, duration: 5000, useNativeDriver: false }).start(onClose);
+    Animated.timing(progressAnim, { toValue: 1, duration: 5000, useNativeDriver: false }).start(({ finished }) => { if (finished) onClose(); });
     return () => progressAnim.stopAnimation();
   }, []);
   const progressWidth = progressAnim.interpolate({ inputRange: [0, 1], outputRange: ["0%", "100%"] });
@@ -156,7 +163,9 @@ function StoryViewer({ companion, onClose }: { companion: Companion; onClose: ()
             </View>
             <View>
               <Text style={styles.storyHeaderName}>{companion.name}</Text>
-              <Text style={styles.storyHeaderTime}>Active now · {companion.distance} km away</Text>
+              <Text style={styles.storyHeaderTime}>
+                {relativeTime(story.createdAt)}{companion.distance != null ? ` · ${companion.distance} km away` : ` · ${companion.city}`}
+              </Text>
             </View>
             <TouchableOpacity onPress={onClose} style={styles.storyClose}>
               <Ionicons name="close" size={24} color="#fff" />
@@ -164,7 +173,7 @@ function StoryViewer({ companion, onClose }: { companion: Companion; onClose: ()
           </View>
           <View style={styles.storyBody}>
             <Text style={styles.storyEmoji}>🌙</Text>
-            <Text style={styles.storyText}>Available tonight from 8pm</Text>
+            <Text style={styles.storyText}>{story.text}</Text>
             <Text style={styles.storySubtext}>{companion.city} · {companion.rate.toLocaleString()} UGX/hr</Text>
             {companion.isTonightsDeal && (
               <View style={styles.storyDealBadge}>
@@ -198,7 +207,6 @@ function CategoryTile({
 }) {
   const colors = useColors("dark");
   const scaleAnim = useRef(new Animated.Value(1)).current;
-
   const handlePress = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     Animated.sequence([
@@ -207,7 +215,6 @@ function CategoryTile({
     ]).start();
     onPress();
   };
-
   return (
     <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
       <TouchableOpacity
@@ -250,7 +257,6 @@ function SwipeCard({ companion, isTop, onSwipe, onView }: {
   const rotateAnim = useRef(new Animated.Value(0)).current;
   const likeOpacity = useRef(new Animated.Value(0)).current;
   const passOpacity = useRef(new Animated.Value(0)).current;
-
   const panResponder = useRef(
     PanResponder.create({
       onMoveShouldSetPanResponder: () => true,
@@ -276,9 +282,7 @@ function SwipeCard({ companion, isTop, onSwipe, onView }: {
       },
     })
   ).current;
-
   const rotate = rotateAnim.interpolate({ inputRange: [-20, 0, 20], outputRange: ["-12deg", "0deg", "12deg"] });
-
   if (!isTop) {
     return (
       <View style={[styles.card, styles.backCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -288,7 +292,6 @@ function SwipeCard({ companion, isTop, onSwipe, onView }: {
       </View>
     );
   }
-
   return (
     <Animated.View
       {...panResponder.panHandlers}
@@ -298,9 +301,8 @@ function SwipeCard({ companion, isTop, onSwipe, onView }: {
       }]}
     >
       <Pressable onPress={onView} style={styles.cardPressable}>
-        <Image source={COMPANION_PHOTOS[companion.photoIndex]} style={styles.photo} resizeMode="cover" />
+        <Image source={photoSource(companion)} style={styles.photo} resizeMode="cover" />
         <View style={styles.photoOverlay} />
-
         {/* Status badges */}
         <View style={styles.cardTopBadges}>
           {companion.isNewInTown && (
@@ -321,14 +323,12 @@ function SwipeCard({ companion, isTop, onSwipe, onView }: {
             </View>
           )}
         </View>
-
         {/* Price tag */}
         <View style={[styles.priceTag, { backgroundColor: "rgba(0,0,0,0.65)" }]}>
           <Text style={styles.priceTagText}>
             {(companion.rate / 1000).toFixed(0)}k <Text style={styles.priceTagUnit}>UGX/hr</Text>
           </Text>
         </View>
-
         <Animated.View style={[styles.likeStamp, { opacity: likeOpacity }]}>
           <Ionicons name="heart" size={14} color="#FF4E62" />
           <Text style={styles.likeStampText}>CONNECT</Text>
@@ -336,17 +336,16 @@ function SwipeCard({ companion, isTop, onSwipe, onView }: {
         <Animated.View style={[styles.passStamp, { opacity: passOpacity }]}>
           <Text style={styles.passStampText}>PASS</Text>
         </Animated.View>
-
         <View style={styles.cardInfo}>
           <View style={styles.cardNameRow}>
-            <Text style={styles.cardName}>{companion.name}, {companion.age}</Text>
+            <Text style={styles.cardName}>{companion.name}{companion.age ? `, ${companion.age}` : ""}</Text>
             {companion.verified && <Ionicons name="checkmark-circle" size={18} color="#FF4E62" />}
           </View>
           <View style={styles.cardMeta}>
             <Ionicons name="location-outline" size={13} color="rgba(255,255,255,0.7)" />
-            <Text style={styles.cardMetaText}>{companion.distance} km · {companion.city}</Text>
-            <View style={[styles.availDot, { backgroundColor: companion.availabilityStatus === "now" ? "#22c55e" : "#FF8A3D" }]} />
-            <Text style={styles.availText}>{companion.availabilityStatus === "now" ? "Now" : "Tonight"}</Text>
+            <Text style={styles.cardMetaText}>{companion.distance != null ? `${companion.distance} km · ` : ""}{companion.city}</Text>
+            <View style={[styles.availDot, { backgroundColor: companion.availabilityStatus === "now" ? "#22c55e" : companion.availabilityStatus === "tonight" ? "#FF8A3D" : "#6b6b8a" }]} />
+            <Text style={styles.availText}>{companion.availabilityStatus === "now" ? "Now" : companion.availabilityStatus === "tonight" ? "Tonight" : "Offline"}</Text>
           </View>
           <View style={styles.cardVibes}>
             {companion.vibes.slice(0, 3).map((v) => (
@@ -360,7 +359,7 @@ function SwipeCard({ companion, isTop, onSwipe, onView }: {
             <TrustBadge score={companion.trustScore} size="sm" />
             <View style={styles.ratingRow}>
               <Ionicons name="star" size={12} color="#FF8A3D" />
-              <Text style={styles.ratingText}>{companion.rating.toFixed(1)}</Text>
+              <Text style={styles.ratingText}>{companion.reviewCount > 0 ? companion.rating.toFixed(1) : "New"}</Text>
               <Text style={styles.meetupCount}>· {companion.completedMeetups} meetups</Text>
             </View>
           </View>
@@ -373,48 +372,41 @@ function SwipeCard({ companion, isTop, onSwipe, onView }: {
 export default function DiscoverScreen() {
   const colors = useColors("dark");
   const insets = useSafeAreaInsets();
-  const { companions, likeCompanion, passCompanion, likedIds, passedIds } = useApp();
+  const { companions, companionsLoading, stories, likeCompanion, passCompanion, likedIds, passedIds } = useApp();
   const [bookingFor, setBookingFor] = useState<Companion | null>(null);
   const [mood, setMood] = useState<CategoryValue>(null);
-  const [storyCompanion, setStoryCompanion] = useState<Companion | null>(null);
+  const [storyOpen, setStoryOpen] = useState<AppStory | null>(null);
+  // Ids swiped during this session are removed immediately so the stack never shows the same card twice.
+  const [dismissed, setDismissed] = useState<Set<string>>(new Set());
 
-  const filtered = companions.filter((c) => {
-    if (likedIds.has(c.id) || passedIds.has(c.id)) return false;
-    if (mood && !c.menu.includes(mood) && !c.vibes.includes(mood)) return false;
-    return true;
-  });
-
-  const [queue, setQueue] = useState<Companion[]>(filtered);
+  const queue = useMemo(
+    () => companions.filter((c) => !likedIds.has(c.id) && !passedIds.has(c.id) && !dismissed.has(c.id) && matchesCategory(c, mood)),
+    [companions, likedIds, passedIds, dismissed, mood],
+  );
 
   useEffect(() => {
-    setQueue(filtered);
-  }, [likedIds, passedIds, mood, companions]);
+    // Forget local dismissals once the server confirms them.
+    setDismissed((prev) => {
+      const next = new Set([...prev].filter((id) => !likedIds.has(id) && !passedIds.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [likedIds, passedIds]);
 
   const handleSwipe = (liked: boolean) => {
     if (queue.length === 0) return;
     const top = queue[0];
-    if (liked) likeCompanion(top.id);
-    else passCompanion(top.id);
-    setQueue((prev) => prev.slice(1));
-  };
-
-  const handleCategoryChange = (value: CategoryValue) => {
-    setMood(value);
-    const newFiltered = companions.filter((c) => {
-      if (likedIds.has(c.id) || passedIds.has(c.id)) return false;
-      if (value && !c.menu.includes(value) && !c.vibes.includes(value)) return false;
-      return true;
+    setDismissed((prev) => new Set(prev).add(top.id));
+    (liked ? likeCompanion(top.id) : passCompanion(top.id)).catch(() => {
+      setDismissed((prev) => {
+        const next = new Set(prev);
+        next.delete(top.id);
+        return next;
+      });
     });
-    setQueue(newFiltered);
   };
 
-  const getCategoryCount = (value: CategoryValue) => {
-    if (!value) return companions.filter(c => !likedIds.has(c.id) && !passedIds.has(c.id)).length;
-    return companions.filter(c =>
-      !likedIds.has(c.id) && !passedIds.has(c.id) &&
-      (c.menu.includes(value) || c.vibes.includes(value))
-    ).length;
-  };
+  const getCategoryCount = (value: CategoryValue) =>
+    companions.filter((c) => !likedIds.has(c.id) && !passedIds.has(c.id) && matchesCategory(c, value)).length;
 
   const onlineCount = companions.filter(c => c.availabilityStatus === "now").length;
   const dealsCount = companions.filter(c => c.isTonightsDeal).length;
@@ -440,19 +432,19 @@ export default function DiscoverScreen() {
           )}
         </View>
       </View>
-
       {/* Stories strip */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.storiesScroll} contentContainerStyle={styles.storiesRow}>
-        {STORY_COMPANIONS.map((c, i) => (
-          <StoryCircle
-            key={c.id}
-            companion={c}
-            onPress={() => setStoryCompanion(c)}
-            isNew={c.isNewInTown}
-          />
-        ))}
-      </ScrollView>
-
+      {stories.length > 0 && (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.storiesScroll} contentContainerStyle={styles.storiesRow}>
+          {stories.map((s) => (
+            <StoryCircle
+              key={s.id}
+              companion={s.companion}
+              onPress={() => setStoryOpen(s)}
+              isNew={s.companion.isNewInTown}
+            />
+          ))}
+        </ScrollView>
+      )}
       {/* Category tiles */}
       <ScrollView
         horizontal
@@ -465,29 +457,37 @@ export default function DiscoverScreen() {
             cat={cat}
             count={getCategoryCount(cat.value)}
             active={mood === cat.value}
-            onPress={() => handleCategoryChange(cat.value)}
+            onPress={() => setMood(cat.value)}
           />
         ))}
       </ScrollView>
-
       {/* Card stack */}
       <View style={styles.cardStack}>
         {queue.length === 0 ? (
           <View style={[styles.emptyState, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Text style={styles.emptyEmoji}>🌙</Text>
-            <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
-              {mood ? `No one for this tonight` : "You've seen everyone"}
-            </Text>
-            <Text style={[styles.emptySubtitle, { color: colors.mutedForeground }]}>
-              {mood ? "Try a different category or check back later" : "New companions come online every evening"}
-            </Text>
-            {mood && (
-              <TouchableOpacity
-                style={[styles.resetBtn, { backgroundColor: colors.primary }]}
-                onPress={() => handleCategoryChange(null)}
-              >
-                <Text style={styles.resetBtnText}>Show All</Text>
-              </TouchableOpacity>
+            {companionsLoading && companions.length === 0 ? (
+              <>
+                <ActivityIndicator color={colors.primary} />
+                <Text style={[styles.emptyTitle, { color: colors.foreground }]}>Finding companions…</Text>
+              </>
+            ) : (
+              <>
+                <Text style={styles.emptyEmoji}>🌙</Text>
+                <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
+                  {mood ? `No one for this tonight` : companions.length === 0 ? "No companions nearby yet" : "You've seen everyone"}
+                </Text>
+                <Text style={[styles.emptySubtitle, { color: colors.mutedForeground }]}>
+                  {mood ? "Try a different category or check back later" : "New companions come online every evening"}
+                </Text>
+                {mood && (
+                  <TouchableOpacity
+                    style={[styles.resetBtn, { backgroundColor: colors.primary }]}
+                    onPress={() => setMood(null)}
+                  >
+                    <Text style={styles.resetBtnText}>Show All</Text>
+                  </TouchableOpacity>
+                )}
+              </>
             )}
           </View>
         ) : (
@@ -505,7 +505,6 @@ export default function DiscoverScreen() {
           </>
         )}
       </View>
-
       {/* Action buttons */}
       {queue.length > 0 && (
         <View style={[styles.actions, { paddingBottom: Platform.OS === "web" ? 34 : insets.bottom + 10 }]}>
@@ -518,7 +517,6 @@ export default function DiscoverScreen() {
             </TouchableOpacity>
             <Text style={[styles.actionLabel, { color: colors.mutedForeground }]}>Pass</Text>
           </View>
-
           <View style={styles.actionWrap}>
             <TouchableOpacity
               style={[styles.actionBtn, styles.superBtn, { backgroundColor: "rgba(255,138,61,0.15)", borderColor: colors.accent }]}
@@ -528,7 +526,6 @@ export default function DiscoverScreen() {
             </TouchableOpacity>
             <Text style={[styles.actionLabel, { color: colors.mutedForeground }]}>Profile</Text>
           </View>
-
           <View style={styles.actionWrap}>
             <TouchableOpacity
               style={[styles.actionBtn, styles.likeBtn, { backgroundColor: "rgba(255,78,98,0.15)", borderColor: colors.primary }]}
@@ -540,14 +537,16 @@ export default function DiscoverScreen() {
           </View>
         </View>
       )}
-
-      {storyCompanion && (
-        <StoryViewer companion={storyCompanion} onClose={() => setStoryCompanion(null)} />
+      {storyOpen && (
+        <StoryViewer story={storyOpen} onClose={() => setStoryOpen(null)} />
       )}
       <BookingModal
         visible={!!bookingFor}
         companion={bookingFor}
         onClose={() => setBookingFor(null)}
+        onBooked={() => {
+          if (bookingFor) likeCompanion(bookingFor.id).catch(() => {});
+        }}
       />
     </View>
   );

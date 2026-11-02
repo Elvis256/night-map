@@ -3,6 +3,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import {
+  ActivityIndicator,
+  Alert,
   Animated,
   KeyboardAvoidingView,
   Platform,
@@ -14,26 +16,24 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import {
+  endStream,
+  getGetStreamQueryKey,
+  getListStreamCommentsQueryKey,
+  getListStreamsQueryKey,
+  joinStream,
+  leaveStream,
+  postStreamComment,
+  sendStreamHeart,
+  startStream,
+  useGetStream,
+  useListStreamComments,
+  useListStreams,
+  type Stream,
+} from "@workspace/api-client-react";
 import { useColors } from "@workspace/nightmap-design-system/hooks/use-colors";
-import { COMPANIONS, useApp } from "@/context/AppContext";
-
-const LIVE_DATA: Record<string, { title: string; viewers: number }> = {
-  "1": { title: "Morning yoga & chat ☀️", viewers: 234 },
-  "3": { title: "Get ready with me 💄", viewers: 189 },
-  "5": { title: "Club night preparations 🎶", viewers: 312 },
-  "2": { title: "Q&A — ask me anything ✨", viewers: 97 },
-};
-
-const MOCK_COMMENTS = [
-  { id: "1",  name: "James",   text: "You look amazing tonight! 🔥",      color: "#FF4E62" },
-  { id: "2",  name: "Kevin",   text: "First time watching 👀",             color: "#3DA9FF" },
-  { id: "3",  name: "Sam",     text: "Enjoying the stream 🌹",              color: "#7A3CFF" },
-  { id: "4",  name: "Marcus",  text: "How long are you streaming for?",    color: "#FF8A3D" },
-  { id: "5",  name: "Brian",   text: "Great stream so far!",                color: "#1FBF6B" },
-  { id: "6",  name: "David",   text: "Your bio said you're in Kampala?",   color: "#FF4E62" },
-  { id: "7",  name: "Andre",   text: "Welcome back!! Missed your streams", color: "#3DA9FF" },
-  { id: "8",  name: "Tone",    text: "Can we do a meet-up this weekend?",  color: "#7A3CFF" },
-];
+import { useApp } from "@/context/AppContext";
+import { errorMessage } from "@/lib/api";
 
 function FloatingHeart({ color, startX }: { color: string; startX: number }) {
   const anim = useRef(new Animated.Value(0)).current;
@@ -61,11 +61,14 @@ function FloatingHeart({ color, startX }: { color: string; startX: number }) {
   );
 }
 
-function BroadcastSetup({ companion, onGoLive }: { companion: NonNullable<ReturnType<typeof COMPANIONS.find>>; onGoLive: (title: string) => void }) {
+function BroadcastSetup({ onGoLive }: { onGoLive: (title: string, description: string) => Promise<void> }) {
   const colors = useColors("dark");
   const insets = useSafeAreaInsets();
+  const { userProfile } = useApp();
   const [title, setTitle] = useState("");
   const [desc, setDesc] = useState("");
+  const [starting, setStarting] = useState(false);
+  const meetups = userProfile.companionProfile?.completedMeetups ?? 0;
   return (
     <View style={[styles.setupContainer, { backgroundColor: colors.background, paddingTop: Platform.OS === "web" ? 60 : insets.top }]}>
       <View style={styles.setupHeader}>
@@ -75,22 +78,20 @@ function BroadcastSetup({ companion, onGoLive }: { companion: NonNullable<Return
         <Text style={[styles.setupTitle, { color: colors.foreground }]}>Go Live</Text>
         <View style={{ width: 36 }} />
       </View>
-
-      <ScrollView contentContainerStyle={styles.setupScroll} showsVerticalScrollIndicator={false}>
-        <View style={[styles.setupPreview, { backgroundColor: companion.color }]}>
+      <ScrollView contentContainerStyle={styles.setupScroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+        <View style={[styles.setupPreview, { backgroundColor: userProfile.avatarColor }]}>
           <View style={[styles.setupAvatarRing, { borderColor: "#FF4E62" }]}>
-            <Text style={styles.setupAvatarInitial}>{companion.name[0]}</Text>
+            <Text style={styles.setupAvatarInitial}>{userProfile.name[0]}</Text>
           </View>
           <View style={[styles.setupLiveBadge, { backgroundColor: "#FF4E62" }]}>
             <View style={styles.setupLiveDot} />
             <Text style={styles.setupLiveBadgeText}>LIVE PREVIEW</Text>
           </View>
           <View style={styles.setupPreviewInfo}>
-            <Text style={styles.setupPreviewName}>{companion.name}</Text>
-            <Text style={styles.setupPreviewSub}>{companion.city} · {companion.completedMeetups} meetups</Text>
+            <Text style={styles.setupPreviewName}>{userProfile.name}</Text>
+            <Text style={styles.setupPreviewSub}>{userProfile.city} · {meetups} meetups</Text>
           </View>
         </View>
-
         <View style={styles.setupSection}>
           <Text style={[styles.setupLabel, { color: colors.mutedForeground }]}>STREAM TITLE</Text>
           <TextInput
@@ -102,7 +103,6 @@ function BroadcastSetup({ companion, onGoLive }: { companion: NonNullable<Return
             maxLength={60}
           />
         </View>
-
         <View style={styles.setupSection}>
           <Text style={[styles.setupLabel, { color: colors.mutedForeground }]}>DESCRIPTION (optional)</Text>
           <TextInput
@@ -116,73 +116,78 @@ function BroadcastSetup({ companion, onGoLive }: { companion: NonNullable<Return
             maxLength={150}
           />
         </View>
-
         <View style={styles.setupSection}>
           <Text style={[styles.setupLabel, { color: colors.mutedForeground }]}>STREAM ACCESS</Text>
           <Text style={[styles.setupHint, { color: colors.mutedForeground }]}>
-            Streams are free in this preview. Paid viewing and tips are not active.
+            Streams are free to watch. Viewers can comment and send hearts; paid viewing and tips are not active.
           </Text>
         </View>
-
         <View style={[styles.setupTips, { backgroundColor: "rgba(31,191,107,0.08)", borderColor: "rgba(31,191,107,0.3)" }]}>
           <Ionicons name="information-circle" size={16} color="#1FBF6B" />
           <Text style={[styles.setupTipText, { color: colors.mutedForeground }]}>
-            No stream payments or wallet credits are processed here.
+            Your stream appears in Radio › Live Streams for everyone in NightMap while it is live.
           </Text>
         </View>
-
         <TouchableOpacity
           style={[styles.goLiveBtn, { backgroundColor: title.trim() ? "#FF4E62" : colors.muted }]}
-          onPress={() => {
-            if (!title.trim()) return;
+          onPress={async () => {
+            if (!title.trim() || starting) return;
+            setStarting(true);
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-            onGoLive(title.trim());
+            try {
+              await onGoLive(title.trim(), desc.trim());
+            } finally {
+              setStarting(false);
+            }
           }}
           activeOpacity={0.85}
+          disabled={starting}
         >
-          <View style={styles.goLiveDot} />
-          <Text style={styles.goLiveBtnText}>{title.trim() ? "Go Live Now" : "Add a title to go live"}</Text>
+          {starting ? <ActivityIndicator color="#fff" /> : <View style={styles.goLiveDot} />}
+          <Text style={styles.goLiveBtnText}>{starting ? "Starting…" : title.trim() ? "Go Live Now" : "Add a title to go live"}</Text>
         </TouchableOpacity>
       </ScrollView>
     </View>
   );
 }
 
-function LiveView({ companion, title, isBroadcaster }: {
-  companion: NonNullable<ReturnType<typeof COMPANIONS.find>>;
-  title: string;
-  isBroadcaster: boolean;
-}) {
+function LiveView({ streamId, isBroadcaster }: { streamId: string; isBroadcaster: boolean }) {
   const colors = useColors("dark");
   const insets = useSafeAreaInsets();
-  const [viewers, setViewers] = useState(isBroadcaster ? 1 : (LIVE_DATA[companion.id]?.viewers ?? 50));
+  const { invalidate } = useApp();
   const [comment, setComment] = useState("");
-  const [comments, setComments] = useState(MOCK_COMMENTS);
   const [hearts, setHearts] = useState<{ id: number; x: number; color: string }[]>([]);
+  const [localHearts, setLocalHearts] = useState(0);
   const scrollRef = useRef<ScrollView>(null);
   const heartId = useRef(0);
 
+  const streamQuery = useGetStream(streamId, {
+    query: { queryKey: getGetStreamQueryKey(streamId), refetchInterval: 5000 },
+  });
+  const commentsQuery = useListStreamComments(streamId, undefined, {
+    query: { queryKey: getListStreamCommentsQueryKey(streamId), refetchInterval: 3000 },
+  });
+
+  // Join on mount (counts as a viewer), heartbeat every 30s, leave on unmount.
   useEffect(() => {
-    const interval = setInterval(() => {
-      setViewers(v => v + Math.floor(Math.random() * 3 - 1));
-    }, 4000);
-    return () => clearInterval(interval);
-  }, []);
+    let cancelled = false;
+    joinStream(streamId).catch(() => {});
+    const id = setInterval(() => {
+      if (!cancelled) joinStream(streamId).catch(() => {});
+    }, 30000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+      leaveStream(streamId).catch(() => {});
+    };
+  }, [streamId]);
+
+  const stream = streamQuery.data;
+  const comments = commentsQuery.data ?? [];
 
   useEffect(() => {
-    if (!isBroadcaster) return;
-    const interval = setInterval(() => {
-      const newComment = {
-        id: Date.now().toString(),
-        name: ["James", "Kevin", "Sam", "Marcus", "Brian", "David", "Andre"][Math.floor(Math.random() * 7)],
-        text: ["You look amazing 🔥", "❤️❤️❤️", "Stay longer please!", "Great stream!", "Best stream today 🙌"][Math.floor(Math.random() * 5)],
-        color: ["#FF4E62", "#3DA9FF", "#7A3CFF", "#FF8A3D"][Math.floor(Math.random() * 4)],
-      };
-      setComments(prev => [...prev.slice(-15), newComment]);
-      scrollRef.current?.scrollToEnd({ animated: true });
-    }, 3500);
-    return () => clearInterval(interval);
-  }, [isBroadcaster]);
+    scrollRef.current?.scrollToEnd({ animated: true });
+  }, [comments.length]);
 
   const sendHeart = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -190,58 +195,88 @@ function LiveView({ companion, title, isBroadcaster }: {
     const x = 20 + Math.random() * 60;
     const color = ["#FF4E62", "#FF8A3D", "#7A3CFF", "#3DA9FF"][Math.floor(Math.random() * 4)];
     setHearts(h => [...h, { id, x, color }]);
+    setLocalHearts(n => n + 1);
     setTimeout(() => setHearts(h => h.filter(hh => hh.id !== id)), 1500);
+    sendStreamHeart(streamId).catch(() => {});
   };
 
-  const sendComment = () => {
-    if (!comment.trim()) return;
+  const sendComment = async () => {
+    const text = comment.trim();
+    if (!text) return;
     Haptics.selectionAsync();
-    const c: typeof comments[0] = {
-      id: Date.now().toString(),
-      name: "You",
-      text: comment.trim(),
-      color: "#FF4E62",
-    };
-    setComments(prev => [...prev.slice(-15), c]);
     setComment("");
-    scrollRef.current?.scrollToEnd({ animated: true });
+    try {
+      await postStreamComment(streamId, { text });
+      invalidate([getListStreamCommentsQueryKey(streamId)]);
+    } catch (err) {
+      Alert.alert("Could not send", errorMessage(err));
+    }
   };
+
+  const handleEnd = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    try {
+      await endStream(streamId);
+      invalidate([getListStreamsQueryKey()]);
+    } catch (err) {
+      Alert.alert("Could not end stream", errorMessage(err));
+      return;
+    }
+    router.back();
+  };
+
+  if (!stream) {
+    return (
+      <View style={[styles.liveContainer, { backgroundColor: "#000", alignItems: "center", justifyContent: "center" }]}>
+        {streamQuery.isError ? (
+          <>
+            <Text style={{ color: "#fff", fontFamily: "Inter_600SemiBold", fontSize: 16 }}>Stream unavailable</Text>
+            <TouchableOpacity onPress={() => router.back()} style={{ marginTop: 16 }}>
+              <Text style={{ color: "#FF4E62", fontFamily: "Inter_600SemiBold" }}>Go back</Text>
+            </TouchableOpacity>
+          </>
+        ) : (
+          <ActivityIndicator color="#FF4E62" />
+        )}
+      </View>
+    );
+  }
+
+  const ended = stream.status === "ended";
+  const host = stream.host;
 
   return (
     <View style={[styles.liveContainer, { backgroundColor: "#000" }]}>
       {/* Background colour wash */}
-      <View style={[StyleSheet.absoluteFill, { backgroundColor: companion.color, opacity: 0.25 }]} />
-
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: host.avatarColor, opacity: 0.25 }]} />
       {/* Top bar */}
       <View style={[styles.liveTopBar, { paddingTop: Platform.OS === "web" ? 60 : insets.top + 4 }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.liveBackBtn}>
           <Ionicons name="arrow-back" size={20} color="#fff" />
         </TouchableOpacity>
         <View style={styles.liveTitleBlock}>
-          <View style={styles.liveBadgePill}>
-            <View style={styles.livePulse} />
-          <Text style={styles.liveBadgeText}>FREE PREVIEW</Text>
+          <View style={[styles.liveBadgePill, ended && { backgroundColor: "rgba(107,107,138,0.6)" }]}>
+            {!ended && <View style={styles.livePulse} />}
+            <Text style={styles.liveBadgeText}>{ended ? "ENDED" : "LIVE"}</Text>
           </View>
-          <Text style={styles.liveStreamTitle} numberOfLines={1}>{title}</Text>
+          <Text style={styles.liveStreamTitle} numberOfLines={1}>{stream.title}</Text>
         </View>
         <View style={styles.liveViewerCount}>
           <Ionicons name="eye" size={13} color="rgba(255,255,255,0.8)" />
-          <Text style={styles.liveViewerText}>{Math.max(1, viewers).toLocaleString()}</Text>
+          <Text style={styles.liveViewerText}>{Math.max(1, stream.viewerCount).toLocaleString()}</Text>
+          <Text style={[styles.liveViewerText, { marginLeft: 6 }]}>❤️ {(stream.heartCount + localHearts).toLocaleString()}</Text>
         </View>
       </View>
-
       {/* Host avatar */}
       <View style={styles.liveAvatarArea} pointerEvents="none">
-        <View style={[styles.liveHostAvatar, { backgroundColor: companion.color, borderColor: "#FF4E62" }]}>
-          <Text style={styles.liveHostInitial}>{companion.name[0]}</Text>
+        <View style={[styles.liveHostAvatar, { backgroundColor: host.avatarColor, borderColor: "#FF4E62" }]}>
+          <Text style={styles.liveHostInitial}>{host.name[0]}</Text>
         </View>
-        <Text style={styles.liveHostName}>{companion.name}</Text>
-        <Text style={styles.liveHostCity}>{companion.city} · {companion.completedMeetups} meetups</Text>
+        <Text style={styles.liveHostName}>{host.name}</Text>
+        <Text style={styles.liveHostCity}>{host.city}{stream.description ? ` · ${stream.description}` : ""}</Text>
       </View>
-
       {/* Floating hearts */}
       {hearts.map(h => <FloatingHeart key={h.id} color={h.color} startX={h.x} />)}
-
       {/* Chat */}
       <View style={styles.chatArea} pointerEvents="box-none">
         <ScrollView
@@ -251,45 +286,44 @@ function LiveView({ companion, title, isBroadcaster }: {
           pointerEvents="none"
           onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
         >
-          {comments.map(c => (
+          {comments.slice(-30).map(c => (
             <View key={c.id} style={styles.chatBubble}>
-              <Text style={[styles.chatName, { color: c.color }]}>{c.name}: </Text>
+              <Text style={[styles.chatName, { color: c.fromMe ? "#FF4E62" : c.userColor }]}>{c.fromMe ? "You" : c.userName}: </Text>
               <Text style={styles.chatText}>{c.text}</Text>
             </View>
           ))}
         </ScrollView>
       </View>
-
       {/* Bottom controls */}
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         style={[styles.liveControls, { paddingBottom: Platform.OS === "web" ? 24 : insets.bottom + 8 }]}
       >
         <Text style={styles.paymentUnavailable}>
-          Tips and paid viewing are disabled in this preview.
+          {ended ? "This stream has ended." : "Chat and hearts are live · Camera streaming and tips are not connected yet."}
         </Text>
-
         {/* Comment input + action buttons */}
         <View style={styles.commentRow}>
           <TextInput
             style={[styles.commentInput, { backgroundColor: "rgba(255,255,255,0.12)", color: "#fff" }]}
-            placeholder="Say something..."
+            placeholder={ended ? "Stream ended" : "Say something..."}
             placeholderTextColor="rgba(255,255,255,0.45)"
             value={comment}
             onChangeText={setComment}
             onSubmitEditing={sendComment}
             returnKeyType="send"
+            editable={!ended}
           />
-          <TouchableOpacity style={styles.sendBtn} onPress={sendComment}>
+          <TouchableOpacity style={styles.sendBtn} onPress={sendComment} disabled={ended}>
             <Ionicons name="send" size={18} color="#fff" />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.heartBtn} onPress={sendHeart}>
+          <TouchableOpacity style={styles.heartBtn} onPress={sendHeart} disabled={ended}>
             <Text style={{ fontSize: 22 }}>❤️</Text>
           </TouchableOpacity>
-          {isBroadcaster && (
+          {isBroadcaster && !ended && (
             <TouchableOpacity
               style={[styles.endBtn, { backgroundColor: "#FF4E62" }]}
-              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); router.back(); }}
+              onPress={handleEnd}
             >
               <Text style={styles.endBtnText}>End</Text>
             </TouchableOpacity>
@@ -300,50 +334,105 @@ function LiveView({ companion, title, isBroadcaster }: {
   );
 }
 
-export default function LiveScreen() {
-  const { mode, companionId } = useLocalSearchParams<{ mode: string; companionId: string }>();
+function StreamBrowser() {
+  const colors = useColors("dark");
+  const insets = useSafeAreaInsets();
   const { userProfile } = useApp();
-  const [isLive, setIsLive] = useState(false);
-  const [liveTitle, setLiveTitle] = useState("");
-
-  const isBroadcaster = mode === "broadcast" || (mode !== "watch" && userProfile.isCompanion);
-
-  const resolvedId = companionId ?? "1";
-  const companion = COMPANIONS.find(c => c.id === resolvedId) ?? COMPANIONS[0];
-  const streamData = LIVE_DATA[resolvedId];
-
-  if (mode === "watch" || !userProfile.isCompanion) {
-    return (
-      <LiveView
-        companion={companion}
-        title={streamData?.title ?? "Live Stream"}
-        isBroadcaster={false}
-      />
-    );
-  }
-
-  if (!isLive) {
-    return (
-      <BroadcastSetup
-        companion={companion}
-        onGoLive={(title) => {
-          setLiveTitle(title);
-          setIsLive(true);
-        }}
-      />
-    );
-  }
-
+  const streamsQuery = useListStreams({ query: { queryKey: getListStreamsQueryKey(), refetchInterval: 10000 } });
+  const streams: Stream[] = streamsQuery.data ?? [];
   return (
-    <LiveView
-      companion={companion}
-      title={liveTitle}
-      isBroadcaster={true}
-    />
+    <View style={[styles.setupContainer, { backgroundColor: colors.background, paddingTop: Platform.OS === "web" ? 60 : insets.top }]}>
+      <View style={styles.setupHeader}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+          <Ionicons name="arrow-back" size={22} color={colors.foreground} />
+        </TouchableOpacity>
+        <Text style={[styles.setupTitle, { color: colors.foreground }]}>Live Streams</Text>
+        <View style={{ width: 36 }} />
+      </View>
+      <ScrollView contentContainerStyle={styles.setupScroll} showsVerticalScrollIndicator={false}>
+        {streamsQuery.isLoading ? (
+          <ActivityIndicator color={colors.primary} style={{ marginTop: 40 }} />
+        ) : streams.length === 0 ? (
+          <View style={{ alignItems: "center", paddingVertical: 48, gap: 8 }}>
+            <Text style={{ fontSize: 40 }}>📺</Text>
+            <Text style={{ color: colors.foreground, fontFamily: "Inter_600SemiBold", fontSize: 16 }}>Nobody is live right now</Text>
+            <Text style={{ color: colors.mutedForeground, fontFamily: "Inter_400Regular", fontSize: 13, textAlign: "center" }}>
+              Companions go live most evenings. Check back after 8pm.
+            </Text>
+          </View>
+        ) : (
+          streams.map((s) => (
+            <TouchableOpacity
+              key={s.id}
+              style={[styles.browseCard, { backgroundColor: colors.card, borderColor: `${s.host.avatarColor}60` }]}
+              onPress={() => router.replace({ pathname: "/live", params: { mode: "watch", streamId: s.id } })}
+              activeOpacity={0.85}
+            >
+              <View style={[styles.browseAvatar, { backgroundColor: s.host.avatarColor }]}>
+                <Text style={styles.setupAvatarInitial}>{s.host.name[0]}</Text>
+              </View>
+              <View style={{ flex: 1, gap: 3 }}>
+                <Text style={{ color: colors.foreground, fontFamily: "Inter_600SemiBold", fontSize: 15 }}>{s.host.name}</Text>
+                <Text style={{ color: colors.mutedForeground, fontFamily: "Inter_400Regular", fontSize: 13 }} numberOfLines={1}>{s.title}</Text>
+                <Text style={{ color: colors.mutedForeground, fontFamily: "Inter_400Regular", fontSize: 12 }}>👁 {s.viewerCount} · ❤️ {s.heartCount} · {s.host.city}</Text>
+              </View>
+              <View style={[styles.browseLive, { backgroundColor: "rgba(255,78,98,0.15)", borderColor: "rgba(255,78,98,0.5)" }]}>
+                <Text style={{ color: "#FF4E62", fontFamily: "Inter_700Bold", fontSize: 11 }}>WATCH</Text>
+              </View>
+            </TouchableOpacity>
+          ))
+        )}
+        {userProfile.isCompanion && (
+          <TouchableOpacity
+            style={[styles.goLiveBtn, { backgroundColor: "#FF4E62" }]}
+            onPress={() => router.replace({ pathname: "/live", params: { mode: "broadcast" } })}
+          >
+            <View style={styles.goLiveDot} />
+            <Text style={styles.goLiveBtnText}>Go Live</Text>
+          </TouchableOpacity>
+        )}
+      </ScrollView>
+    </View>
   );
 }
 
+export default function LiveScreen() {
+  const { mode, streamId } = useLocalSearchParams<{ mode?: string; streamId?: string }>();
+  const { userProfile, invalidate } = useApp();
+  const [liveStreamId, setLiveStreamId] = useState<string | null>(null);
+
+  if (mode === "watch" && streamId) {
+    return <LiveView streamId={streamId} isBroadcaster={false} />;
+  }
+
+  if (mode === "broadcast" && userProfile.isCompanion) {
+    if (!liveStreamId) {
+      return (
+        <BroadcastSetup
+          onGoLive={async (title, description) => {
+            try {
+              const stream = await startStream({ title, description: description || undefined });
+              invalidate([getListStreamsQueryKey()]);
+              setLiveStreamId(stream.id);
+            } catch (err) {
+              Alert.alert("Could not go live", errorMessage(err));
+            }
+          }}
+        />
+      );
+    }
+    return <LiveView streamId={liveStreamId} isBroadcaster={true} />;
+  }
+
+  return <StreamBrowser />;
+}
+
 const styles = StyleSheet.create({
+  browseCard: {
+    flexDirection: "row", alignItems: "center", gap: 12, padding: 14, borderRadius: 16, borderWidth: 1, marginBottom: 10,
+  },
+  browseAvatar: { width: 48, height: 48, borderRadius: 24, alignItems: "center", justifyContent: "center" },
+  browseLive: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10, borderWidth: 1 },
   setupContainer: { flex: 1 },
   setupHeader: {
     flexDirection: "row",

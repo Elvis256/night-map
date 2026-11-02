@@ -6,6 +6,7 @@ import {
   ActivityIndicator,
   Animated,
   Platform,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -14,8 +15,10 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { useApp } from "@/context/AppContext";
+import { useApp, type CompanionGender } from "@/context/AppContext";
 import { useLocationCity } from "@/hooks/useLocationCity";
+import { errorMessage } from "@/lib/api";
+import { buildPhone } from "./login";
 
 const COUNTRIES = [
   { flag: "🇺🇬", code: "+256", iso: "UG" },
@@ -64,7 +67,7 @@ function NumPad({ onPress, onDelete }: { onPress: (d: string) => void; onDelete:
 
 export default function RegisterScreen() {
   const insets = useSafeAreaInsets();
-  const { updateProfile } = useApp();
+  const { register } = useApp();
   const fadeAnim = useRef(new Animated.Value(1)).current;
 
   const [page, setPage] = useState(0);
@@ -72,10 +75,13 @@ export default function RegisterScreen() {
   const [phone, setPhone] = useState("");
   const [countryIdx, setCountryIdx] = useState(0);
   const [role, setRole] = useState<"seeker" | "companion" | null>(null);
+  const [gender, setGender] = useState<CompanionGender>("female");
+  const [referral, setReferral] = useState("");
   const [pin, setPin] = useState("");
   const [confirmPin, setConfirmPin] = useState("");
   const [pinStage, setPinStage] = useState<"set" | "confirm">("set");
   const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
   const [detectedCity, setDetectedCity] = useState<string | null>(null);
 
   const { detect: detectCity, status: detectStatus } = useLocationCity((city) => {
@@ -130,16 +136,31 @@ export default function RegisterScreen() {
   };
 
   const handleFinish = async () => {
-    await AsyncStorage.setItem("onboarded", "true");
-    await AsyncStorage.setItem("authToken", `nm_${Date.now()}`);
-    await AsyncStorage.setItem("userPin", pin);
-    updateProfile({
-      name: name.trim(),
-      city: detectedCity ?? "Kampala",
-      isCompanion: role === "companion",
-    });
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    router.replace("/(tabs)");
+    if (submitting || !role) return;
+    setSubmitting(true);
+    setError("");
+    const fullPhone = buildPhone(country.code, phone);
+    try {
+      await register({
+        phone: fullPhone,
+        pin,
+        name: name.trim(),
+        role,
+        city: detectedCity ?? "Kampala",
+        gender: role === "companion" ? gender : undefined,
+        referralCode: referral.trim() || undefined,
+      });
+      await AsyncStorage.setItem("lastPhone", fullPhone);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      router.replace("/(tabs)");
+    } catch (err) {
+      const msg = errorMessage(err, "Could not create your account. Try again.");
+      setError(msg);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      if (/already exists/i.test(msg)) animateTo(0);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const stepTitles = ["Create Account", "Set Your PIN", "Your Location"];
@@ -172,7 +193,7 @@ export default function RegisterScreen() {
 
         {/* ── Page 0: Identity ────────────────────────────── */}
         {page === 0 && (
-          <View style={styles.formGap}>
+          <ScrollView contentContainerStyle={styles.formGap} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
             <View style={styles.fieldGap}>
               <Text style={styles.fieldLabel}>FULL NAME</Text>
               <TextInput
@@ -233,13 +254,43 @@ export default function RegisterScreen() {
               </View>
             </View>
 
+            {role === "companion" && (
+              <View style={styles.fieldGap}>
+                <Text style={styles.fieldLabel}>LIST ME UNDER</Text>
+                <View style={styles.roleRow}>
+                  {([["female", "Companions"], ["male", "Gentleman Companions"]] as const).map(([value, label]) => (
+                    <TouchableOpacity
+                      key={value}
+                      style={[styles.genderChip, gender === value && styles.genderChipActive]}
+                      onPress={() => { setGender(value); Haptics.selectionAsync(); }}
+                    >
+                      <Text style={[styles.genderChipText, gender === value && { color: "#1FBF6B" }]}>{label}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            )}
+
+            <View style={styles.fieldGap}>
+              <Text style={styles.fieldLabel}>INVITE CODE (optional)</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="NIGHT-XXXX"
+                placeholderTextColor="#3A4460"
+                value={referral}
+                onChangeText={v => setReferral(v.toUpperCase())}
+                autoCapitalize="characters"
+                maxLength={12}
+              />
+            </View>
+
             {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
             <TouchableOpacity style={styles.primaryBtn} onPress={handlePage0} activeOpacity={0.85}>
               <Text style={styles.primaryBtnText}>Continue</Text>
               <Ionicons name="arrow-forward" size={18} color="#fff" />
             </TouchableOpacity>
-          </View>
+          </ScrollView>
         )}
 
         {/* ── Page 1: PIN ─────────────────────────────────── */}
@@ -300,16 +351,18 @@ export default function RegisterScreen() {
               <Text style={styles.deniedHint}>Enable Location in your device Settings, then tap again.</Text>
             )}
 
+            {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
             {!detectedCity && detectStatus !== "detecting" && (
-              <TouchableOpacity onPress={handleFinish} style={styles.skipBtn}>
-                <Text style={styles.skipBtnText}>Skip for now (defaults to Kampala)</Text>
+              <TouchableOpacity onPress={handleFinish} style={styles.skipBtn} disabled={submitting}>
+                <Text style={styles.skipBtnText}>{submitting ? "Creating your account…" : "Skip for now (defaults to Kampala)"}</Text>
               </TouchableOpacity>
             )}
 
             {detectedCity && (
-              <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: "#1FBF6B" }]} onPress={handleFinish} activeOpacity={0.85}>
-                <Ionicons name="checkmark-circle" size={20} color="#fff" />
-                <Text style={styles.primaryBtnText}>Start Exploring!</Text>
+              <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: "#1FBF6B" }]} onPress={handleFinish} activeOpacity={0.85} disabled={submitting}>
+                {submitting ? <ActivityIndicator color="#fff" /> : <Ionicons name="checkmark-circle" size={20} color="#fff" />}
+                <Text style={styles.primaryBtnText}>{submitting ? "Creating account…" : "Start Exploring!"}</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -327,6 +380,12 @@ export default function RegisterScreen() {
 }
 
 const styles = StyleSheet.create({
+  genderChip: {
+    flex: 1, borderRadius: 14, borderWidth: 1.5, borderColor: "#2A3045",
+    backgroundColor: "#1F2535", paddingVertical: 12, alignItems: "center",
+  },
+  genderChipActive: { borderColor: "#1FBF6B", backgroundColor: "rgba(31,191,107,0.08)" },
+  genderChipText: { color: "#AAB3C5", fontFamily: "Inter_600SemiBold", fontSize: 13 },
   root: {
     flex: 1,
     backgroundColor: "#0B0B0F",

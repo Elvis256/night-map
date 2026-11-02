@@ -2,7 +2,7 @@ import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import React, { useState } from "react";
 import {
-  Animated,
+  ActivityIndicator,
   Modal,
   ScrollView,
   StyleSheet,
@@ -11,7 +11,10 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { createReview, getGetScoreQueryKey, getListBookingsQueryKey, getGetMeQueryKey } from "@workspace/api-client-react";
 import { useColors } from "@workspace/nightmap-design-system/hooks/use-colors";
+import { useApp } from "@/context/AppContext";
+import { errorMessage } from "@/lib/api";
 
 const DIMENSIONS = [
   { key: "personality", label: "Personality", icon: "happy-outline", color: "#7A3CFF" },
@@ -20,8 +23,8 @@ const DIMENSIONS = [
   { key: "service", label: "Service Quality", icon: "star-outline", color: "#FF8A3D" },
   { key: "safety", label: "Safety", icon: "shield-checkmark-outline", color: "#1FBF6B" },
 ] as const;
-
-type RatingsMap = Record<string, number>;
+type DimensionKey = typeof DIMENSIONS[number]["key"];
+type RatingsMap = Partial<Record<DimensionKey, number>>;
 
 function StarRow({ dim, rating, onRate }: { dim: typeof DIMENSIONS[number]; rating: number; onRate: (r: number) => void }) {
   const colors = useColors("dark");
@@ -79,35 +82,62 @@ function SuccessView({ points, onDone }: { points: number; onDone: () => void })
 
 interface Props {
   visible: boolean;
+  companionId: string;
   companionName: string;
   companionColor: string;
+  bookingId?: string | null;
   onClose: () => void;
 }
 
-export function ChemistryModal({ visible, companionName, companionColor, onClose }: Props) {
+export function ChemistryModal({ visible, companionId, companionName, companionColor, bookingId, onClose }: Props) {
   const colors = useColors("dark");
+  const { invalidate } = useApp();
   const [ratings, setRatings] = useState<RatingsMap>({});
   const [review, setReview] = useState("");
   const [submitted, setSubmitted] = useState(false);
-  const [pointsEarned] = useState(Math.floor(50 + Math.random() * 50));
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+  const [pointsEarned, setPointsEarned] = useState(0);
+  const values = Object.values(ratings).filter((v): v is number => typeof v === "number");
+  const avgRating = values.length ? values.reduce((a, b) => a + b, 0) / values.length : 0;
+  const canSubmit = DIMENSIONS.every((d) => ratings[d.key]) && !submitting;
 
-  const avgRating = Object.values(ratings).length
-    ? Object.values(ratings).reduce((a, b) => a + b, 0) / Object.values(ratings).length
-    : 0;
-
-  const canSubmit = Object.keys(ratings).length === DIMENSIONS.length;
-
-  const handleSubmit = () => {
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    setSubmitted(true);
+  const handleSubmit = async () => {
+    if (!canSubmit) return;
+    setSubmitting(true);
+    setError("");
+    try {
+      const result = await createReview({
+        companionId,
+        bookingId: bookingId ?? undefined,
+        personality: ratings.personality!,
+        appearance: ratings.appearance!,
+        punctuality: ratings.punctuality!,
+        service: ratings.service!,
+        safety: ratings.safety!,
+        text: review.trim() || undefined,
+      });
+      setPointsEarned(result.pointsEarned);
+      setSubmitted(true);
+      invalidate([getGetScoreQueryKey(), getListBookingsQueryKey(), getGetMeQueryKey()]);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (err) {
+      setError(errorMessage(err, "Could not submit your review."));
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleClose = () => {
     setRatings({});
     setReview("");
     setSubmitted(false);
+    setError("");
     onClose();
   };
+
+  const remaining = DIMENSIONS.filter((d) => !ratings[d.key]).length;
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={handleClose}>
@@ -115,11 +145,10 @@ export function ChemistryModal({ visible, companionName, companionColor, onClose
         <View style={[styles.sheet, { backgroundColor: colors.background, borderColor: colors.border }]}>
           {/* Handle */}
           <View style={[styles.handle, { backgroundColor: colors.border }]} />
-
           {submitted ? (
             <SuccessView points={pointsEarned} onDone={handleClose} />
           ) : (
-            <ScrollView showsVerticalScrollIndicator={false}>
+            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
               {/* Header */}
               <View style={styles.sheetHeader}>
                 <View style={[styles.companionAvatar, { backgroundColor: companionColor }]}>
@@ -136,13 +165,11 @@ export function ChemistryModal({ visible, companionName, companionColor, onClose
                   </View>
                 )}
               </View>
-
               {/* Chemistry score label */}
               <View style={[styles.chemistrLabel, { backgroundColor: "rgba(122,60,255,0.08)", borderColor: "rgba(122,60,255,0.2)" }]}>
                 <Ionicons name="flask-outline" size={14} color="#7A3CFF" />
                 <Text style={[styles.chemistryText, { color: "#7A3CFF" }]}>Chemistry Score — 5 dimensions</Text>
               </View>
-
               {/* Dimension ratings */}
               <View style={[styles.ratingCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
                 {DIMENSIONS.map((dim) => (
@@ -154,10 +181,9 @@ export function ChemistryModal({ visible, companionName, companionColor, onClose
                   />
                 ))}
               </View>
-
               {/* Written review */}
               <View style={[styles.reviewCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                <Text style={[styles.reviewLabel, { color: colors.mutedForeground }]}>Write a review (optional)</Text>
+                <Text style={[styles.reviewLabel, { color: colors.mutedForeground }]}>Write a review (optional · +25 pts)</Text>
                 <TextInput
                   style={[styles.reviewInput, { color: colors.foreground }]}
                   placeholder="Describe your experience — this helps others in the community…"
@@ -169,26 +195,26 @@ export function ChemistryModal({ visible, companionName, companionColor, onClose
                 />
                 <Text style={[styles.reviewCount, { color: colors.mutedForeground }]}>{review.length}/300</Text>
               </View>
-
               {/* Earn points notice */}
               <View style={[styles.earnNotice, { backgroundColor: "rgba(255,138,61,0.08)", borderColor: "rgba(255,138,61,0.2)" }]}>
                 <Text style={styles.earnEmoji}>⚡</Text>
                 <Text style={[styles.earnText, { color: colors.mutedForeground }]}>
-                  Earn up to <Text style={{ color: "#FF8A3D", fontFamily: "Inter_700Bold" }}>100 loyalty points</Text> for reviewing
+                  Earn up to <Text style={{ color: "#FF8A3D", fontFamily: "Inter_700Bold" }}>100 loyalty points</Text> for reviewing{bookingId ? " a completed meetup" : ""}
                 </Text>
               </View>
-
+              {error ? <Text style={[styles.cancelText, { color: "#FF4E62", textAlign: "center" }]}>{error}</Text> : null}
               {/* Submit */}
               <TouchableOpacity
                 style={[styles.submitBtn, { backgroundColor: canSubmit ? colors.primary : colors.muted }]}
                 onPress={handleSubmit}
                 disabled={!canSubmit}
               >
-                <Text style={[styles.submitText, { color: canSubmit ? "#fff" : colors.mutedForeground }]}>
-                  {canSubmit ? "Submit Chemistry Score" : `Rate ${DIMENSIONS.length - Object.keys(ratings).length} more dimension${DIMENSIONS.length - Object.keys(ratings).length !== 1 ? "s" : ""}`}
-                </Text>
+                {submitting ? <ActivityIndicator color="#fff" /> : (
+                  <Text style={[styles.submitText, { color: canSubmit ? "#fff" : colors.mutedForeground }]}>
+                    {remaining === 0 ? "Submit Chemistry Score" : `Rate ${remaining} more dimension${remaining !== 1 ? "s" : ""}`}
+                  </Text>
+                )}
               </TouchableOpacity>
-
               <TouchableOpacity style={styles.cancelBtn} onPress={handleClose}>
                 <Text style={[styles.cancelText, { color: colors.mutedForeground }]}>Maybe later</Text>
               </TouchableOpacity>

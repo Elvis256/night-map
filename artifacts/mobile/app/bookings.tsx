@@ -3,6 +3,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import React, { useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   Platform,
   ScrollView,
@@ -12,118 +13,60 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { safetyCheckIn, type BookingActionRequestAction } from "@workspace/api-client-react";
 import { useColors } from "@workspace/nightmap-design-system/hooks/use-colors";
 import { AppBooking, formatUGX, useApp } from "@/context/AppContext";
+import { errorMessage } from "@/lib/api";
 import { ChemistryModal } from "@/components/ChemistryModal";
 
-type BookingStatus = "active" | "upcoming" | "completed" | "cancelled";
-
-interface Booking {
-  id: string;
-  companionName: string;
-  companionColor: string;
-  companionInitial: string;
-  activity: string;
-  date: string;
-  time: string;
-  hours: number;
-  rate: number;
-  status: BookingStatus;
-  city: string;
-  bookedAt: string;
-  safetyActive: boolean;
-  meetupCode: string;
-  rated: boolean;
-}
-
-const SEEKER_BOOKINGS: Booking[] = [
-  {
-    id: "b1", companionName: "Amara", companionColor: "#7A3CFF", companionInitial: "A",
-    activity: "Dinner Date", date: "Tonight", time: "8:00 PM", hours: 3, rate: 120_000,
-    status: "active", city: "Kampala", bookedAt: "2h ago",
-    safetyActive: true, meetupCode: "NM-4821", rated: false,
-  },
-  {
-    id: "b2", companionName: "Fatoumata", companionColor: "#FF8A3D", companionInitial: "F",
-    activity: "Nightclub", date: "Fri 11 Jul", time: "10:00 PM", hours: 4, rate: 150_000,
-    status: "upcoming", city: "Kampala", bookedAt: "Yesterday",
-    safetyActive: false, meetupCode: "NM-7713", rated: false,
-  },
-  {
-    id: "b3", companionName: "Leila", companionColor: "#FF4E62", companionInitial: "L",
-    activity: "City Tour", date: "Mon 7 Jul", time: "2:00 PM", hours: 5, rate: 100_000,
-    status: "completed", city: "Nairobi", bookedAt: "5 days ago",
-    safetyActive: false, meetupCode: "NM-3305", rated: true,
-  },
-  {
-    id: "b4", companionName: "Zara", companionColor: "#1FBF6B", companionInitial: "Z",
-    activity: "Movie Night", date: "Thu 3 Jul", time: "7:30 PM", hours: 2, rate: 80_000,
-    status: "completed", city: "Kampala", bookedAt: "1 week ago",
-    safetyActive: false, meetupCode: "NM-2291", rated: false,
-  },
-];
-
-const COMPANION_REQUESTS: Booking[] = [
-  {
-    id: "r1", companionName: "James K.", companionColor: "#3DA9FF", companionInitial: "J",
-    activity: "Dinner Date", date: "Tonight", time: "9:00 PM", hours: 3, rate: 120_000,
-    status: "active", city: "Kampala", bookedAt: "1h ago",
-    safetyActive: true, meetupCode: "NM-9042", rated: false,
-  },
-  {
-    id: "r2", companionName: "Brian M.", companionColor: "#FF8A3D", companionInitial: "B",
-    activity: "Conversation & Drinks", date: "Fri 11 Jul", time: "8:00 PM", hours: 2, rate: 120_000,
-    status: "upcoming", city: "Kampala", bookedAt: "3h ago",
-    safetyActive: false, meetupCode: "NM-6631", rated: false,
-  },
-  {
-    id: "r3", companionName: "Kevin O.", companionColor: "#7A3CFF", companionInitial: "K",
-    activity: "Events", date: "Mon 7 Jul", time: "6:00 PM", hours: 4, rate: 120_000,
-    status: "completed", city: "Kampala", bookedAt: "5 days ago",
-    safetyActive: false, meetupCode: "NM-1173", rated: false,
-  },
-];
-
+type BookingStatus = AppBooking["status"];
 const STATUS_CONFIG: Record<BookingStatus, { label: string; color: string; bg: string; icon: string }> = {
+  pending:   { label: "Pending",   color: "#FF8A3D",  bg: "rgba(255,138,61,0.10)",  icon: "hourglass-outline" },
   active:    { label: "Active",    color: "#22c55e",  bg: "rgba(34,197,94,0.10)",   icon: "radio-button-on" },
-  upcoming:  { label: "Upcoming",  color: "#3DA9FF",  bg: "rgba(61,169,255,0.10)",  icon: "time-outline" },
+  upcoming:  { label: "Confirmed", color: "#3DA9FF",  bg: "rgba(61,169,255,0.10)",  icon: "time-outline" },
   completed: { label: "Completed", color: "#AAB3C5",  bg: "rgba(170,179,197,0.10)", icon: "checkmark-circle-outline" },
   cancelled: { label: "Cancelled", color: "#FF4E62",  bg: "rgba(255,78,98,0.10)",   icon: "close-circle-outline" },
+  declined:  { label: "Declined",  color: "#FF4E62",  bg: "rgba(255,78,98,0.10)",   icon: "close-circle-outline" },
 };
 
 function BookingCard({
   booking,
   isCompanion,
+  busy,
   onChat,
   onShareLocation,
-  onCancel,
+  onAction,
+  onCheckIn,
   onRate,
 }: {
-  booking: Booking;
+  booking: AppBooking;
   isCompanion: boolean;
+  busy: boolean;
   onChat: () => void;
   onShareLocation: () => void;
-  onCancel: () => void;
+  onAction: (action: BookingActionRequestAction) => void;
+  onCheckIn: () => void;
   onRate: () => void;
 }) {
   const colors = useColors("dark");
   const s = STATUS_CONFIG[booking.status];
-  const totalCost = booking.rate * booking.hours;
-  const earnings = Math.round(totalCost * 0.8);
-
-  const handleCheckIn = () => {
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    Alert.alert("Safety Check-In", "Your location has been shared with your trusted contact. Stay safe! 💙");
+  const seekerSide = booking.isSeekerSide;
+  const confirm = (title: string, message: string, action: BookingActionRequestAction, destructive = false) => {
+    Alert.alert(title, message, [
+      { text: "Back", style: "cancel" },
+      { text: title, style: destructive ? "destructive" : "default", onPress: () => onAction(action) },
+    ]);
   };
-
-  const handleCancel = () => {
-    Alert.alert(
-      "Cancel Booking",
-      `Cancel your booking with ${booking.companionName}? This may incur a cancellation fee.`,
-      [{ text: "Keep Booking" }, { text: "Cancel", style: "destructive", onPress: onCancel }]
-    );
-  };
-
+  const Btn = ({ label, icon, color, bg, border, onPress, flex }: { label: string; icon: string; color: string; bg: string; border: string; onPress: () => void; flex?: boolean }) => (
+    <TouchableOpacity
+      style={[styles.actionBtn, { backgroundColor: bg, borderColor: border, opacity: busy ? 0.6 : 1 }, flex && { flex: 1 }]}
+      onPress={onPress}
+      disabled={busy}
+    >
+      <Ionicons name={icon as never} size={15} color={color} />
+      <Text style={[styles.actionBtnText, { color }]}>{label}</Text>
+    </TouchableOpacity>
+  );
   return (
     <View style={[styles.card, { backgroundColor: colors.card, borderColor: booking.status === "active" ? `${s.color}40` : colors.border }]}>
       {/* Header row */}
@@ -136,18 +79,19 @@ function BookingCard({
             <Text style={[styles.companionName, { color: colors.foreground }]}>{booking.companionName}</Text>
             <View style={[styles.statusPill, { backgroundColor: s.bg }]}>
               <Ionicons name={s.icon as never} size={10} color={s.color} />
-              <Text style={[styles.statusText, { color: s.color }]}>{s.label}</Text>
+              <Text style={[styles.statusText, { color: s.color }]}>
+                {booking.status === "pending" && seekerSide ? "Awaiting response" : booking.status === "pending" ? "New request" : s.label}
+              </Text>
             </View>
           </View>
           <Text style={[styles.activityText, { color: colors.mutedForeground }]}>
-            {booking.activity} · {booking.city}
+            {booking.activity} · {booking.city} · {booking.bookedAt}
           </Text>
         </View>
         <TouchableOpacity onPress={onChat} style={[styles.chatBtn, { backgroundColor: colors.muted, borderColor: colors.border }]}>
           <Ionicons name="chatbubble-outline" size={15} color={colors.mutedForeground} />
         </TouchableOpacity>
       </View>
-
       {/* Details */}
       <View style={[styles.detailRow, { borderColor: colors.border }]}>
         {[
@@ -161,15 +105,17 @@ function BookingCard({
           </View>
         ))}
       </View>
-
+      {!!booking.note && (
+        <Text style={[styles.activityText, { color: colors.mutedForeground, fontStyle: "italic" }]}>“{booking.note}”</Text>
+      )}
       {/* Amount */}
       <View style={styles.amountRow}>
         <View>
           <Text style={[styles.amountLabel, { color: colors.mutedForeground }]}>
-            {isCompanion ? "You earn" : "Total cost"}
+            {isCompanion ? "You earn · paid directly" : "Agreed rate · paid directly"}
           </Text>
           <Text style={[styles.amountValue, { color: isCompanion ? "#1FBF6B" : colors.primary }]}>
-            {formatUGX(isCompanion ? earnings : totalCost)}
+            {formatUGX(booking.total)}
           </Text>
         </View>
         <View style={[styles.codeBox, { backgroundColor: colors.muted }]}>
@@ -177,46 +123,41 @@ function BookingCard({
           <Text style={[styles.codeValue, { color: colors.foreground }]}>{booking.meetupCode}</Text>
         </View>
       </View>
-
       {/* Actions */}
-      {booking.status === "active" && (
+      {booking.status === "pending" && !seekerSide && (
         <View style={styles.actionsRow}>
-          <TouchableOpacity
-            style={[styles.actionBtn, { backgroundColor: "rgba(34,197,94,0.10)", borderColor: "rgba(34,197,94,0.3)" }]}
-            onPress={handleCheckIn}
-          >
-            <Ionicons name="shield-checkmark-outline" size={15} color="#22c55e" />
-            <Text style={[styles.actionBtnText, { color: "#22c55e" }]}>Check In</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.actionBtn, { backgroundColor: colors.muted, borderColor: colors.border }]}
-            onPress={onShareLocation}
-          >
-            <Ionicons name="location-outline" size={15} color={colors.mutedForeground} />
-            <Text style={[styles.actionBtnText, { color: colors.mutedForeground }]}>Share Location</Text>
-          </TouchableOpacity>
+          <Btn flex label="Accept" icon="checkmark-outline" color="#22c55e" bg="rgba(34,197,94,0.10)" border="rgba(34,197,94,0.3)" onPress={() => onAction("accept")} />
+          <Btn flex label="Decline" icon="close-outline" color={colors.mutedForeground} bg={colors.muted} border={colors.border}
+            onPress={() => confirm("Decline", `Decline ${booking.companionName}'s request?`, "decline", true)} />
+        </View>
+      )}
+      {booking.status === "pending" && seekerSide && (
+        <View style={styles.actionsRow}>
+          <Btn flex label="Cancel request" icon="close-outline" color={colors.mutedForeground} bg={colors.muted} border={colors.border}
+            onPress={() => confirm("Cancel request", `Withdraw your request to ${booking.companionName}?`, "cancel", true)} />
         </View>
       )}
       {booking.status === "upcoming" && (
         <View style={styles.actionsRow}>
-          <TouchableOpacity
-            style={[styles.actionBtn, { flex: 1, backgroundColor: colors.muted, borderColor: colors.border, opacity: 0.7 }]}
-            disabled
-            accessibilityState={{ disabled: true }}
-          >
-            <Ionicons name="information-circle-outline" size={15} color={colors.mutedForeground} />
-            <Text style={[styles.actionBtnText, { color: colors.mutedForeground }]}>Payments unavailable</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.actionBtn, { flex: 1, backgroundColor: colors.muted, borderColor: colors.border }]}
-            onPress={handleCancel}
-          >
-            <Ionicons name="close-outline" size={15} color={colors.mutedForeground} />
-            <Text style={[styles.actionBtnText, { color: colors.mutedForeground }]}>Cancel</Text>
-          </TouchableOpacity>
+          <Btn flex label="Start meetup" icon="play-outline" color="#22c55e" bg="rgba(34,197,94,0.10)" border="rgba(34,197,94,0.3)"
+            onPress={() => confirm("Start meetup", `Confirm you have met using code ${booking.meetupCode}. Safety check-in will activate.`, "start")} />
+          <Btn flex label="Cancel" icon="close-outline" color={colors.mutedForeground} bg={colors.muted} border={colors.border}
+            onPress={() => confirm("Cancel booking", `Cancel your booking with ${booking.companionName}?`, "cancel", true)} />
         </View>
       )}
-      {booking.status === "completed" && !booking.rated && (
+      {booking.status === "active" && (
+        <>
+          <View style={styles.actionsRow}>
+            <Btn label="Check In" icon="shield-checkmark-outline" color="#22c55e" bg="rgba(34,197,94,0.10)" border="rgba(34,197,94,0.3)" onPress={onCheckIn} />
+            <Btn label="Share Location" icon="location-outline" color={colors.mutedForeground} bg={colors.muted} border={colors.border} onPress={onShareLocation} />
+          </View>
+          <View style={styles.actionsRow}>
+            <Btn flex label="Mark complete" icon="flag-outline" color="#7A3CFF" bg="rgba(122,60,255,0.10)" border="rgba(122,60,255,0.3)"
+              onPress={() => confirm("Mark complete", "Confirm the meetup has ended.", "complete")} />
+          </View>
+        </>
+      )}
+      {booking.status === "completed" && !booking.rated && seekerSide && (
         <TouchableOpacity
           style={[styles.rateBtn, { backgroundColor: "rgba(122,60,255,0.10)", borderColor: "rgba(122,60,255,0.3)" }]}
           onPress={() => { Haptics.selectionAsync(); onRate(); }}
@@ -234,38 +175,50 @@ type Tab = "active" | "upcoming" | "history";
 export default function BookingsScreen() {
   const colors = useColors("dark");
   const insets = useSafeAreaInsets();
-  const { userProfile, matches, bookings: createdBookings, updateBookingStatus } = useApp();
+  const { userProfile, bookings, bookingsLoading, updateBookingStatus, coords } = useApp();
   const [tab, setTab] = useState<Tab>("active");
-  const [ratingTarget, setRatingTarget] = useState<{ name: string; color: string } | null>(null);
-
-  const bookings: Booking[] = userProfile.isCompanion ? COMPANION_REQUESTS : [
-    ...createdBookings.map((booking): Booking => ({
-      id: booking.id,
-      companionName: booking.companionName,
-      companionColor: booking.companionColor,
-      companionInitial: booking.companionInitial,
-      activity: booking.activity,
-      date: booking.date,
-      time: booking.time,
-      hours: booking.hours,
-      rate: booking.rate,
-      status: booking.status,
-      city: booking.city,
-      bookedAt: booking.bookedAt,
-      safetyActive: booking.safetyActive,
-      meetupCode: booking.meetupCode,
-      rated: booking.rated,
-    })),
-    ...SEEKER_BOOKINGS,
-  ];
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [ratingTarget, setRatingTarget] = useState<AppBooking | null>(null);
+  const isCompanion = userProfile.isCompanion;
   const active   = bookings.filter(b => b.status === "active");
-  const upcoming = bookings.filter(b => b.status === "upcoming");
-  const history  = bookings.filter(b => b.status === "completed" || b.status === "cancelled");
-
+  const upcoming = bookings.filter(b => b.status === "upcoming" || b.status === "pending");
+  const history  = bookings.filter(b => b.status === "completed" || b.status === "cancelled" || b.status === "declined");
   const displayed = tab === "active" ? active : tab === "upcoming" ? upcoming : history;
+  const completed = bookings.filter(b => b.status === "completed");
+  const totalCompleted = completed.reduce((s, b) => s + b.total, 0);
+  const ratedCount = completed.filter(b => b.rated).length;
 
-  const totalSpent = SEEKER_BOOKINGS.filter(b => b.status === "completed").reduce((s, b) => s + b.rate * b.hours, 0);
-  const totalEarned = COMPANION_REQUESTS.filter(b => b.status === "completed").reduce((s, b) => s + Math.round(b.rate * b.hours * 0.8), 0);
+  const runAction = async (b: AppBooking, action: BookingActionRequestAction) => {
+    setBusyId(b.id);
+    try {
+      await updateBookingStatus(b.id, action);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      if (action === "start") setTab("active");
+      if (action === "complete") setTab("history");
+      if (action === "accept") setTab("upcoming");
+    } catch (err) {
+      Alert.alert("Something went wrong", errorMessage(err));
+    } finally {
+      setBusyId(null);
+    }
+  };
+  const handleCheckIn = async (b: AppBooking) => {
+    setBusyId(b.id);
+    try {
+      const event = await safetyCheckIn({ lat: coords?.lat, lng: coords?.lng, bookingId: b.id });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert(
+        "Safety Check-In",
+        event.contactsNotified > 0
+          ? `Your location has been shared with ${event.contactsNotified} trusted contact${event.contactsNotified > 1 ? "s" : ""}. Stay safe! 💙`
+          : "Check-in recorded. Add a trusted contact in the Safety Hub so they receive your location.",
+      );
+    } catch (err) {
+      Alert.alert("Something went wrong", errorMessage(err));
+    } finally {
+      setBusyId(null);
+    }
+  };
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
@@ -276,54 +229,52 @@ export default function BookingsScreen() {
         </TouchableOpacity>
         <View>
           <Text style={[styles.headerTitle, { color: colors.foreground }]}>
-            {userProfile.isCompanion ? "Booking Requests" : "My Bookings"}
+            {isCompanion ? "Booking Requests" : "My Bookings"}
           </Text>
           {active.length > 0 && (
-            <Text style={[styles.headerSub, { color: "#22c55e" }]}>{active.length} active tonight</Text>
+            <Text style={[styles.headerSub, { color: "#22c55e" }]}>{active.length} active now</Text>
           )}
         </View>
         <View style={{ width: 36 }} />
       </View>
-
       {/* Stats strip */}
       <View style={[styles.statsStrip, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
-        {userProfile.isCompanion ? (
+        {isCompanion ? (
           <>
             <View style={styles.statItem}>
-              <Text style={[styles.statVal, { color: "#1FBF6B" }]}>{formatUGX(totalEarned)}</Text>
+              <Text style={[styles.statVal, { color: "#1FBF6B" }]}>{formatUGX(totalCompleted)}</Text>
               <Text style={[styles.statLab, { color: colors.mutedForeground }]}>Total Earned</Text>
             </View>
             <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
             <View style={styles.statItem}>
-              <Text style={[styles.statVal, { color: colors.foreground }]}>{COMPANION_REQUESTS.length}</Text>
+              <Text style={[styles.statVal, { color: colors.foreground }]}>{bookings.length}</Text>
               <Text style={[styles.statLab, { color: colors.mutedForeground }]}>Bookings</Text>
             </View>
             <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
             <View style={styles.statItem}>
-              <Text style={[styles.statVal, { color: "#FF8A3D" }]}>4.8 ★</Text>
-              <Text style={[styles.statLab, { color: colors.mutedForeground }]}>Avg Rating</Text>
+              <Text style={[styles.statVal, { color: "#FF8A3D" }]}>{completed.length}</Text>
+              <Text style={[styles.statLab, { color: colors.mutedForeground }]}>Completed</Text>
             </View>
           </>
         ) : (
           <>
             <View style={styles.statItem}>
-              <Text style={[styles.statVal, { color: colors.primary }]}>{formatUGX(totalSpent)}</Text>
+              <Text style={[styles.statVal, { color: colors.primary }]}>{formatUGX(totalCompleted)}</Text>
               <Text style={[styles.statLab, { color: colors.mutedForeground }]}>Total Spent</Text>
             </View>
             <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
             <View style={styles.statItem}>
-              <Text style={[styles.statVal, { color: colors.foreground }]}>{SEEKER_BOOKINGS.length}</Text>
+              <Text style={[styles.statVal, { color: colors.foreground }]}>{completed.length}</Text>
               <Text style={[styles.statLab, { color: colors.mutedForeground }]}>Meetups</Text>
             </View>
             <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
             <View style={styles.statItem}>
-              <Text style={[styles.statVal, { color: "#7A3CFF" }]}>{SEEKER_BOOKINGS.filter(b => b.rated).length}</Text>
+              <Text style={[styles.statVal, { color: "#7A3CFF" }]}>{ratedCount}</Text>
               <Text style={[styles.statLab, { color: colors.mutedForeground }]}>Rated</Text>
             </View>
           </>
         )}
       </View>
-
       {/* Tabs */}
       <View style={[styles.tabs, { borderBottomColor: colors.border }]}>
         {(["active", "upcoming", "history"] as Tab[]).map(t => {
@@ -346,51 +297,48 @@ export default function BookingsScreen() {
           );
         })}
       </View>
-
       <ScrollView
         contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 24 }]}
         showsVerticalScrollIndicator={false}
       >
-        {displayed.length === 0 ? (
+        {bookingsLoading && bookings.length === 0 ? (
+          <ActivityIndicator color={colors.primary} style={{ marginTop: 32 }} />
+        ) : displayed.length === 0 ? (
           <View style={styles.empty}>
             <Ionicons name="calendar-outline" size={48} color={colors.mutedForeground} />
             <Text style={[styles.emptyTitle, { color: colors.foreground }]}>No bookings here</Text>
             <Text style={[styles.emptySub, { color: colors.mutedForeground }]}>
-              {tab === "active" ? "Start by connecting with a companion on the map" : "Your past bookings will appear here"}
+              {isCompanion
+                ? tab === "active" ? "Requests you've accepted and started will appear here" : "New client requests will appear under Upcoming"
+                : tab === "active" ? "Start by connecting with a companion on the map" : "Your past bookings will appear here"}
             </Text>
           </View>
         ) : (
-          displayed.map((b) => {
-            const match = matches.find((m) => m.companion.name === b.companionName);
-            return (
-              <BookingCard
-                key={b.id}
-                booking={b}
-                isCompanion={userProfile.isCompanion}
-                onChat={() => match ? router.push(`/chat/${match.id}`) : router.push("/matches")}
-                onShareLocation={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  router.push("/safety");
-                }}
-                onCancel={() => {
-                  if (createdBookings.some((created) => created.id === b.id)) {
-                    updateBookingStatus(b.id, "cancelled");
-                  } else {
-                    Alert.alert("Booking cancellation", "This demo booking is already managed by the sample schedule.");
-                  }
-                }}
-                onRate={() => setRatingTarget({ name: b.companionName, color: b.companionColor })}
-              />
-            );
-          })
+          displayed.map((b) => (
+            <BookingCard
+              key={b.id}
+              booking={b}
+              isCompanion={isCompanion}
+              busy={busyId === b.id}
+              onChat={() => b.connectionId ? router.push(`/chat/${b.connectionId}`) : router.push("/matches")}
+              onShareLocation={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                router.push("/safety");
+              }}
+              onAction={(action) => runAction(b, action)}
+              onCheckIn={() => handleCheckIn(b)}
+              onRate={() => setRatingTarget(b)}
+            />
+          ))
         )}
       </ScrollView>
-
       {ratingTarget && (
         <ChemistryModal
           visible
-          companionName={ratingTarget.name}
-          companionColor={ratingTarget.color}
+          companionId={ratingTarget.companionId}
+          companionName={ratingTarget.companionName}
+          companionColor={ratingTarget.companionColor}
+          bookingId={ratingTarget.id}
           onClose={() => setRatingTarget(null)}
         />
       )}

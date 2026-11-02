@@ -1,8 +1,10 @@
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
+  ActivityIndicator,
+  Alert,
   Image,
   Platform,
   ScrollView,
@@ -12,10 +14,12 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { getGetCompanionQueryKey, useGetCompanion } from "@workspace/api-client-react";
 import { useColors } from "@workspace/nightmap-design-system/hooks/use-colors";
-import { COMPANIONS, formatUGX, useApp } from "@/context/AppContext";
+import { formatUGX, relativeTime, toCompanion, useApp } from "@/context/AppContext";
 import { TrustBadge } from "@workspace/nightmap-design-system/components/native/TrustBadge";
 import { ConnectionModal } from "@/components/ConnectionModal";
+import { assetUrl, errorMessage } from "@/lib/api";
 
 const COMPANION_PHOTOS = [
   require("@/assets/images/companion1.png"),
@@ -32,6 +36,7 @@ const MENU_ICONS: Record<string, string> = {
   "Conversation & Drinks": "wine-outline",
   "City Tour": "map-outline",
   "Events": "calendar-outline",
+  "Travel Companion": "airplane-outline",
 };
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
@@ -46,27 +51,61 @@ export default function CompanionDetailScreen() {
   const insets = useSafeAreaInsets();
   const { likedIds, matches, savedIds, toggleSaved } = useApp();
   const [showConnect, setShowConnect] = useState(false);
+  const [photoIdx, setPhotoIdx] = useState(0);
+  const companionId = id ?? "";
+  const detailQuery = useGetCompanion(companionId, {
+    query: { queryKey: getGetCompanionQueryKey(companionId), enabled: !!companionId, staleTime: 15000 },
+  });
+  const detail = detailQuery.data;
+  const companion = useMemo(() => (detail ? toCompanion(detail) : null), [detail]);
 
-  const companion = COMPANIONS.find((c) => c.id === id);
   if (!companion) {
     return (
       <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
-        <Text style={{ color: colors.foreground, padding: 20 }}>Not found</Text>
+        <TouchableOpacity style={[styles.backBtn, { top: Platform.OS === "web" ? 67 : insets.top + 8 }]} onPress={() => router.back()}>
+          <Ionicons name="arrow-back" size={22} color="#fff" />
+        </TouchableOpacity>
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 20 }}>
+          {detailQuery.isLoading ? (
+            <ActivityIndicator color={colors.primary} />
+          ) : (
+            <Text style={{ color: colors.foreground }}>
+              {detailQuery.isError ? errorMessage(detailQuery.error, "This profile is not available.") : "Not found"}
+            </Text>
+          )}
+        </View>
       </View>
     );
   }
 
-  const isLiked = likedIds.has(companion.id);
+  const isLiked = likedIds.has(companion.id) || companion.isLiked;
   const isSaved = savedIds.has(companion.id);
   const match = matches.find((m) => m.companion.id === companion.id);
+  const chatId = match?.id ?? companion.connectionId;
   const status = STATUS_LABELS[companion.availabilityStatus];
+  const photos = detail?.photos ?? [];
+  const photoSource = photos.length > 0
+    ? { uri: assetUrl(photos[Math.min(photoIdx, photos.length - 1)].url) ?? "" }
+    : companion.photoUrl
+      ? { uri: companion.photoUrl }
+      : COMPANION_PHOTOS[companion.photoIndex % 3];
+  const reviews = detail?.recentReviews ?? [];
 
   const handleConnect = () => {
-    if (match) {
-      router.push(`/chat/${match.id}`);
+    if (chatId) {
+      router.push(`/chat/${chatId}`);
     } else {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       setShowConnect(true);
+    }
+  };
+
+  const handleSave = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    try {
+      await toggleSaved(companion.id);
+    } catch (err) {
+      Alert.alert("Something went wrong", errorMessage(err));
     }
   };
 
@@ -79,7 +118,7 @@ export default function CompanionDetailScreen() {
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* Photo */}
         <View style={styles.photoSection}>
-          <Image source={COMPANION_PHOTOS[companion.photoIndex]} style={styles.photo} resizeMode="cover" />
+          <Image source={photoSource} style={styles.photo} resizeMode="cover" />
           <View style={styles.photoOverlay} />
           <TouchableOpacity
             style={[styles.backBtn, { top: Platform.OS === "web" ? 67 : insets.top + 8 }]}
@@ -87,23 +126,28 @@ export default function CompanionDetailScreen() {
           >
             <Ionicons name="arrow-back" size={22} color="#fff" />
           </TouchableOpacity>
-
+          {photos.length > 1 && (
+            <View style={styles.photoDots}>
+              {photos.map((p, i) => (
+                <TouchableOpacity key={p.id} onPress={() => setPhotoIdx(i)} style={[styles.photoDot, { backgroundColor: i === photoIdx ? "#fff" : "rgba(255,255,255,0.4)" }]} />
+              ))}
+            </View>
+          )}
           {companion.isSpotlight && (
             <View style={[styles.spotlightBanner, { backgroundColor: "rgba(255,138,61,0.9)" }]}>
               <Ionicons name="star" size={12} color="#fff" />
               <Text style={styles.spotlightText}>Spotlight</Text>
             </View>
           )}
-
           <View style={styles.photoInfo}>
             <View style={styles.nameRow}>
-              <Text style={styles.name}>{companion.name}, {companion.age}</Text>
+              <Text style={styles.name}>{companion.name}{companion.age ? `, ${companion.age}` : ""}</Text>
               {companion.verified && <Ionicons name="checkmark-circle" size={22} color="#FF4E62" />}
             </View>
             <View style={styles.statusRow}>
               <View style={[styles.statusDot, { backgroundColor: status.color }]} />
               <Text style={[styles.statusText, { color: status.color }]}>{status.label}</Text>
-              <Text style={styles.locationText}>· {companion.city} · {companion.distance} km</Text>
+              <Text style={styles.locationText}>· {companion.city}{companion.distance != null ? ` · ${companion.distance} km` : ""}</Text>
             </View>
             {/* Badges */}
             <View style={styles.photoBadges}>
@@ -122,14 +166,15 @@ export default function CompanionDetailScreen() {
             </View>
           </View>
         </View>
-
         <View style={[styles.content, { paddingBottom: 110 + (Platform.OS === "web" ? 34 : insets.bottom) }]}>
           {/* Trust row */}
           <View style={styles.trustRow}>
             <TrustBadge score={companion.trustScore} size="md" />
             <View style={styles.ratingRow}>
               <Ionicons name="star" size={14} color="#FF8A3D" />
-              <Text style={[styles.ratingNum, { color: colors.foreground }]}>{companion.rating.toFixed(1)}</Text>
+              <Text style={[styles.ratingNum, { color: colors.foreground }]}>
+                {companion.reviewCount > 0 ? `${companion.rating.toFixed(1)} (${companion.reviewCount})` : "New"}
+              </Text>
             </View>
             <View style={[styles.metaPill, { backgroundColor: colors.muted }]}>
               <Ionicons name="checkmark-done" size={12} color={colors.mutedForeground} />
@@ -140,7 +185,6 @@ export default function CompanionDetailScreen() {
               <Text style={[styles.metaPillText, { color: colors.mutedForeground }]}>{companion.responseRate}% reply</Text>
             </View>
           </View>
-
           {/* Pricing */}
           <View style={[styles.card, { backgroundColor: colors.card, borderColor: companion.isTonightsDeal ? "#FF8A3D" : colors.border }]}>
             <View style={styles.pricingHeader}>
@@ -168,47 +212,77 @@ export default function CompanionDetailScreen() {
             <View style={[styles.escrowNote, { backgroundColor: "rgba(255,138,61,0.08)", borderColor: "rgba(255,138,61,0.2)" }]}>
               <Ionicons name="shield-checkmark" size={12} color={colors.accent} />
               <Text style={[styles.escrowText, { color: colors.mutedForeground }]}>
-                Rates are informational in this preview. NightMap does not process or hold payments here.
+                Rates are set by the companion and agreed directly. NightMap does not process or hold payments.
               </Text>
             </View>
           </View>
-
           {/* About */}
-          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>About</Text>
-            <Text style={[styles.bioText, { color: colors.mutedForeground }]}>{companion.bio}</Text>
-          </View>
-
-          {/* The Menu */}
-          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>The Menu</Text>
-            <Text style={[styles.menuSubtitle, { color: colors.mutedForeground }]}>Available activities</Text>
-            <View style={styles.menuGrid}>
-              {companion.menu.map((item) => (
-                <View key={item} style={[styles.menuItem, { backgroundColor: "rgba(255,78,98,0.08)", borderColor: "rgba(255,78,98,0.2)" }]}>
-                  <Ionicons name={(MENU_ICONS[item] ?? "ellipse-outline") as never} size={16} color="#FF4E62" />
-                  <Text style={[styles.menuItemText, { color: colors.foreground }]}>{item}</Text>
-                </View>
-              ))}
+          {!!companion.bio && (
+            <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <Text style={[styles.sectionTitle, { color: colors.foreground }]}>About</Text>
+              <Text style={[styles.bioText, { color: colors.mutedForeground }]}>{companion.bio}</Text>
             </View>
+          )}
+          {/* The Menu */}
+          {companion.menu.length > 0 && (
+            <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <Text style={[styles.sectionTitle, { color: colors.foreground }]}>The Menu</Text>
+              <Text style={[styles.menuSubtitle, { color: colors.mutedForeground }]}>Available activities</Text>
+              <View style={styles.menuGrid}>
+                {companion.menu.map((item) => (
+                  <View key={item} style={[styles.menuItem, { backgroundColor: "rgba(255,78,98,0.08)", borderColor: "rgba(255,78,98,0.2)" }]}>
+                    <Ionicons name={(MENU_ICONS[item] ?? "ellipse-outline") as never} size={16} color="#FF4E62" />
+                    <Text style={[styles.menuItemText, { color: colors.foreground }]}>{item}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
+          {/* Reviews */}
+          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Chemistry Scores</Text>
+            {reviews.length === 0 ? (
+              <Text style={[styles.menuSubtitle, { color: colors.mutedForeground }]}>No reviews yet — be the first after a meetup.</Text>
+            ) : (
+              reviews.map((r) => (
+                <View key={r.id} style={[styles.reviewRow, { borderTopColor: colors.border }]}>
+                  <View style={styles.reviewTop}>
+                    <Text style={[styles.reviewName, { color: colors.foreground }]}>{r.reviewerName}</Text>
+                    <View style={styles.reviewStars}>
+                      <Ionicons name="star" size={12} color="#FF8A3D" />
+                      <Text style={[styles.reviewAvg, { color: "#FF8A3D" }]}>{r.average.toFixed(1)}</Text>
+                    </View>
+                    <Text style={[styles.reviewTime, { color: colors.mutedForeground }]}>{relativeTime(r.createdAt)}</Text>
+                  </View>
+                  {!!r.text && <Text style={[styles.reviewText, { color: colors.mutedForeground }]}>{r.text}</Text>}
+                </View>
+              ))
+            )}
           </View>
-
           {/* Verification */}
           <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Verification</Text>
-            {[
-              { icon: "card-outline", label: "Government ID verified" },
-              { icon: "camera-outline", label: "Biometric selfie verified" },
-              { icon: "videocam-outline", label: "5-second liveness check passed" },
-            ].map(({ icon, label }) => (
-              <View key={label} style={styles.verRow}>
-                <Ionicons name={icon as never} size={16} color={colors.accent} />
-                <Text style={[styles.verText, { color: colors.foreground }]}>{label}</Text>
-                <Ionicons name="checkmark-circle" size={15} color="#22c55e" />
+            {companion.verified ? (
+              [
+                { icon: "card-outline", label: "Government ID verified" },
+                { icon: "camera-outline", label: "Biometric selfie verified" },
+                { icon: "videocam-outline", label: "5-second liveness check passed" },
+              ].map(({ icon, label }) => (
+                <View key={label} style={styles.verRow}>
+                  <Ionicons name={icon as never} size={16} color={colors.accent} />
+                  <Text style={[styles.verText, { color: colors.foreground }]}>{label}</Text>
+                  <Ionicons name="checkmark-circle" size={15} color="#22c55e" />
+                </View>
+              ))
+            ) : (
+              <View style={styles.verRow}>
+                <Ionicons name="shield-outline" size={16} color={colors.mutedForeground} />
+                <Text style={[styles.verText, { color: colors.mutedForeground }]}>
+                  {detail?.verificationState === "pending" ? "Verification under review" : "Not yet verified — meet in public places"}
+                </Text>
               </View>
-            ))}
+            )}
           </View>
-
           {/* Safety */}
           <View style={[styles.card, { backgroundColor: "rgba(255,78,98,0.05)", borderColor: "rgba(255,78,98,0.15)" }]}>
             <View style={styles.safetyRow}>
@@ -223,7 +297,6 @@ export default function CompanionDetailScreen() {
           </View>
         </View>
       </ScrollView>
-
       {/* Footer */}
       <View style={[styles.footer, {
         borderTopColor: colors.border,
@@ -232,35 +305,30 @@ export default function CompanionDetailScreen() {
       }]}>
         <TouchableOpacity
           style={[styles.secondaryBtn, { borderColor: colors.border, backgroundColor: colors.card }]}
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            toggleSaved(companion.id);
-          }}
+          onPress={handleSave}
         >
           <Ionicons name={isSaved ? "bookmark" : "bookmark-outline"} size={20} color={isSaved ? colors.primary : colors.foreground} />
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.primaryBtn, {
-            backgroundColor: isLiked ? colors.card : colors.primary,
-            borderColor: isLiked ? colors.border : colors.primary,
+            backgroundColor: chatId ? colors.card : colors.primary,
+            borderColor: chatId ? colors.border : colors.primary,
           }]}
           onPress={handleConnect}
         >
-          <Ionicons name={isLiked ? "chatbubble" : "heart"} size={18} color={isLiked ? colors.primary : "#fff"} />
-          <Text style={[styles.primaryBtnText, { color: isLiked ? colors.primary : "#fff" }]}>
-            {match ? "Message" : isLiked ? "Reconnect" : "Connect Tonight"}
+          <Ionicons name={chatId ? "chatbubble" : "heart"} size={18} color={chatId ? colors.primary : "#fff"} />
+          <Text style={[styles.primaryBtnText, { color: chatId ? colors.primary : "#fff" }]}>
+            {chatId ? "Message" : isLiked ? "Connect" : "Connect Tonight"}
           </Text>
         </TouchableOpacity>
       </View>
-
       <ConnectionModal
         companion={companion}
         visible={showConnect}
         onClose={() => setShowConnect(false)}
-        onConnected={() => {
+        onConnected={(matchId) => {
           setShowConnect(false);
-          const newMatch = matches.find((m) => m.companion.id === companion.id);
-          if (newMatch) router.push(`/chat/${newMatch.id}`);
+          router.push(`/chat/${matchId}`);
         }}
       />
     </View>
@@ -268,6 +336,18 @@ export default function CompanionDetailScreen() {
 }
 
 const styles = StyleSheet.create({
+  photoDots: {
+    position: "absolute", top: 12, left: 0, right: 0,
+    flexDirection: "row", justifyContent: "center", gap: 6,
+  },
+  photoDot: { width: 24, height: 3, borderRadius: 2 },
+  reviewRow: { paddingTop: 10, marginTop: 10, borderTopWidth: StyleSheet.hairlineWidth, gap: 4 },
+  reviewTop: { flexDirection: "row", alignItems: "center", gap: 8 },
+  reviewName: { fontFamily: "Inter_600SemiBold", fontSize: 13, flex: 1 },
+  reviewStars: { flexDirection: "row", alignItems: "center", gap: 3 },
+  reviewAvg: { fontFamily: "Inter_700Bold", fontSize: 12 },
+  reviewTime: { fontFamily: "Inter_400Regular", fontSize: 11 },
+  reviewText: { fontFamily: "Inter_400Regular", fontSize: 13, lineHeight: 19 },
   container: { flex: 1 },
   photoSection: { height: 400, position: "relative" },
   photo: { width: "100%", height: "100%", position: "absolute" },

@@ -1,31 +1,81 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import React, {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useState,
-} from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import * as Location from "expo-location";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import {
+  createBooking,
+  createConnection,
+  deleteMe,
+  getGetMeQueryKey,
+  getGetMySwipesQueryKey,
+  getGetSavedCompanionsQueryKey,
+  getGetUnreadCountQueryKey,
+  getListBookingsQueryKey,
+  getListCompanionsQueryKey,
+  getListConnectionsQueryKey,
+  getListDealsQueryKey,
+  getListMessagesQueryKey,
+  getListStoriesQueryKey,
+  heartbeat,
+  login as apiLogin,
+  logout as apiLogout,
+  register as apiRegister,
+  sendMessage as apiSendMessage,
+  swipeCompanion,
+  toggleSaveCompanion,
+  updateBooking,
+  updateCompanionProfile as apiUpdateCompanionProfile,
+  updateMe,
+  useGetMe,
+  useGetMySwipes,
+  useGetSavedCompanions,
+  useGetUnreadCount,
+  useListBookings,
+  useListCompanions,
+  useListConnections,
+  useListDeals,
+  useListStories,
+  type Booking as ApiBooking,
+  type BookingActionRequestAction,
+  type BookingStatus,
+  type CompanionCard,
+  type Connection as ApiConnection,
+  type ConnectionType,
+  type ListCompanionsParams,
+  type NotificationPrefs,
+  type PartySummary,
+  type PrivacyPrefs,
+  type RegisterRequest,
+  type SwipeSummary,
+  type UpdateCompanionProfileRequest,
+  type UpdateMeRequest,
+  type User as ApiUser,
+} from "@workspace/api-client-react";
+import { AUTH_TOKEN_KEY, ONBOARDED_KEY, assetUrl, isUnauthorized } from "@/lib/api";
+import { nearestCity } from "@/hooks/useLocationCity";
 
 export type AvailabilityStatus = "now" | "tonight" | "offline";
-export type CompanionGender = "female" | "male";
+export type CompanionGender = "female" | "male" | "other";
+export type AuthStatus = "loading" | "signedOut" | "signedIn";
 
 export interface Companion {
   id: string;
   name: string;
-  age: number;
+  age: number | null;
   photoIndex: number;
+  photoUrl: string | null;
   vibes: string[];
   menu: string[];
   trustScore: number;
   rating: number;
+  reviewCount: number;
   verified: boolean;
   online: boolean;
   city: string;
-  distance: number;
+  distance: number | null;
   bio: string;
-  lat: number;
-  lng: number;
+  lat: number | null;
+  lng: number | null;
   color: string;
   rate: number;
   minBookingHours: number;
@@ -38,6 +88,9 @@ export interface Companion {
   completedMeetups: number;
   responseRate: number;
   gender: CompanionGender;
+  isLiked: boolean;
+  isSaved: boolean;
+  connectionId: string | null;
 }
 
 export interface Match {
@@ -46,7 +99,9 @@ export interface Match {
   lastMessage: string;
   lastMessageTime: Date;
   unread: number;
-  connectionType: "standard" | "super" | "paidDm";
+  connectionType: ConnectionType;
+  status: "pending" | "accepted" | "declined";
+  isSeekerSide: boolean;
 }
 
 export interface Message {
@@ -55,11 +110,15 @@ export interface Message {
   text: string;
   fromMe: boolean;
   time: Date;
+  kind: "text" | "voice" | "system";
 }
 
 export interface AppBooking {
   id: string;
+  connectionId: string | null;
   companionId: string;
+  otherId: string;
+  isSeekerSide: boolean;
   companionName: string;
   companionColor: string;
   companionInitial: string;
@@ -68,16 +127,29 @@ export interface AppBooking {
   time: string;
   hours: number;
   rate: number;
-  status: "active" | "upcoming" | "completed" | "cancelled";
+  total: number;
+  status: BookingStatus;
   city: string;
   bookedAt: string;
   safetyActive: boolean;
   meetupCode: string;
   rated: boolean;
   note: string;
+  scheduledFor: Date | null;
+  createdAt: Date;
+}
+
+export interface AppStory {
+  id: string;
+  companion: Companion;
+  text: string;
+  createdAt: Date;
+  expiresAt: Date;
 }
 
 export interface UserProfile {
+  id: string;
+  phone: string;
   name: string;
   bio: string;
   isCompanion: boolean;
@@ -85,8 +157,20 @@ export interface UserProfile {
   ghostMode: boolean;
   availableTonight: boolean;
   verified: boolean;
+  verificationStatus: "none" | "pending" | "approved" | "rejected";
   city: string;
   trustedContact: string;
+  language: string;
+  privacy: PrivacyPrefs;
+  notificationPrefs: NotificationPrefs;
+  loyaltyPoints: number;
+  referralCode: string;
+  isAdmin: boolean;
+  avatarColor: string;
+  photoUrl: string | null;
+  gender: CompanionGender;
+  age: number | null;
+  companionProfile: ApiUser["companionProfile"];
   walletBalance: number;
   totalEarnings: number;
   pendingPayout: number;
@@ -100,316 +184,59 @@ export interface Filters {
   maxRate: number;
 }
 
-const BASE_LAT = 0.3136;
-const BASE_LNG = 32.5811;
+export type ProfileUpdate = Partial<
+  Pick<
+    UserProfile,
+    | "name"
+    | "bio"
+    | "city"
+    | "isCompanion"
+    | "isLadiesMode"
+    | "ghostMode"
+    | "availableTonight"
+    | "trustedContact"
+    | "language"
+    | "privacy"
+    | "notificationPrefs"
+    | "gender"
+    | "age"
+  >
+> & { lat?: number; lng?: number };
 
-export const COMPANIONS: Companion[] = [
-  {
-    id: "1",
-    name: "Amara",
-    age: 24,
-    photoIndex: 0,
-    vibes: ["Dinner Date", "Events", "Travel"],
-    menu: ["Dinner Date", "City Tour", "Events", "Conversation & Drinks"],
-    trustScore: 97,
-    rating: 4.9,
-    verified: true,
-    online: true,
-    city: "Kampala",
-    distance: 1.2,
-    bio: "Sophisticated and adventurous. Love great food, rooftop views, and genuine conversation. Available most evenings.",
-    lat: BASE_LAT + 0.008,
-    lng: BASE_LNG + 0.012,
-    color: "#c2185b",
-    rate: 150000,
-    minBookingHours: 2,
-    availabilityStatus: "now",
-    isSpotlight: true,
-    isTonightsDeal: false,
-    dealDiscount: 0,
-    isNewInTown: false,
-    isHotStreak: true,
-    completedMeetups: 47,
-    responseRate: 98,
-    gender: "female",
-  },
-  {
-    id: "2",
-    name: "Leila",
-    age: 27,
-    photoIndex: 1,
-    vibes: ["Nightlife", "Dancing", "VIP Access"],
-    menu: ["Nightclub", "Pool/Swim", "Movie Night", "Conversation & Drinks"],
-    trustScore: 94,
-    rating: 4.8,
-    verified: true,
-    online: true,
-    city: "Kampala",
-    distance: 2.1,
-    bio: "I know every hidden gem in the city. Let me show you a night you won't forget. Dance all night.",
-    lat: BASE_LAT - 0.005,
-    lng: BASE_LNG + 0.018,
-    color: "#7b1fa2",
-    rate: 120000,
-    minBookingHours: 2,
-    availabilityStatus: "now",
-    isSpotlight: false,
-    isTonightsDeal: true,
-    dealDiscount: 30,
-    isNewInTown: false,
-    isHotStreak: true,
-    completedMeetups: 31,
-    responseRate: 94,
-    gender: "female",
-  },
-  {
-    id: "3",
-    name: "Zara",
-    age: 25,
-    photoIndex: 2,
-    vibes: ["Fine Dining", "Art", "Culture"],
-    menu: ["Dinner Date", "City Tour", "Massage", "Conversation & Drinks"],
-    trustScore: 98,
-    rating: 5.0,
-    verified: true,
-    online: true,
-    city: "Kampala",
-    distance: 0.8,
-    bio: "Art curator by day, nightlife curator by night. Refined taste, zero judgment.",
-    lat: BASE_LAT + 0.014,
-    lng: BASE_LNG - 0.007,
-    color: "#00695c",
-    rate: 200000,
-    minBookingHours: 3,
-    availabilityStatus: "now",
-    isSpotlight: false,
-    isTonightsDeal: false,
-    dealDiscount: 0,
-    isNewInTown: true,
-    isHotStreak: false,
-    completedMeetups: 12,
-    responseRate: 100,
-    gender: "female",
-  },
-  {
-    id: "4",
-    name: "Nadine",
-    age: 29,
-    photoIndex: 0,
-    vibes: ["Business", "Hotels", "Confidential"],
-    menu: ["Dinner Date", "Nightclub", "City Tour"],
-    trustScore: 92,
-    rating: 4.7,
-    verified: true,
-    online: false,
-    city: "Kampala",
-    distance: 3.4,
-    bio: "Discreet, professional, and charming. Perfect for business events or private evenings.",
-    lat: BASE_LAT - 0.011,
-    lng: BASE_LNG - 0.009,
-    color: "#1565c0",
-    rate: 180000,
-    minBookingHours: 2,
-    availabilityStatus: "tonight",
-    isSpotlight: false,
-    isTonightsDeal: false,
-    dealDiscount: 0,
-    isNewInTown: false,
-    isHotStreak: false,
-    completedMeetups: 23,
-    responseRate: 89,
-    gender: "female",
-  },
-  {
-    id: "5",
-    name: "Fatoumata",
-    age: 26,
-    photoIndex: 1,
-    vibes: ["Music", "Clubs", "Energy"],
-    menu: ["Nightclub", "Pool/Swim", "Movie Night"],
-    trustScore: 95,
-    rating: 4.9,
-    verified: true,
-    online: true,
-    city: "Kampala",
-    distance: 1.7,
-    bio: "Life is a party and I know the best ones. Join me for an unforgettable night out.",
-    lat: BASE_LAT + 0.003,
-    lng: BASE_LNG + 0.022,
-    color: "#e65100",
-    rate: 100000,
-    minBookingHours: 2,
-    availabilityStatus: "now",
-    isSpotlight: false,
-    isTonightsDeal: true,
-    dealDiscount: 25,
-    isNewInTown: false,
-    isHotStreak: false,
-    completedMeetups: 65,
-    responseRate: 96,
-    gender: "female",
-  },
-  {
-    id: "6",
-    name: "Priya",
-    age: 23,
-    photoIndex: 2,
-    vibes: ["Luxury", "Spa Days", "Shopping"],
-    menu: ["Dinner Date", "Massage", "City Tour", "Pool/Swim"],
-    trustScore: 96,
-    rating: 4.8,
-    verified: true,
-    online: false,
-    city: "Kampala",
-    distance: 4.1,
-    bio: "Your perfect day-to-night companion. From afternoon adventures to evening glamour.",
-    lat: BASE_LAT - 0.018,
-    lng: BASE_LNG + 0.004,
-    color: "#880e4f",
-    rate: 130000,
-    minBookingHours: 2,
-    availabilityStatus: "offline",
-    isSpotlight: false,
-    isTonightsDeal: false,
-    dealDiscount: 0,
-    isNewInTown: true,
-    isHotStreak: false,
-    completedMeetups: 8,
-    responseRate: 92,
-    gender: "female",
-  },
-  {
-    id: "7",
-    name: "David",
-    age: 31,
-    photoIndex: 0,
-    vibes: ["Dinner Date", "Gentleman", "Events"],
-    menu: ["Dinner Date", "City Tour", "Events", "Conversation & Drinks"],
-    trustScore: 93,
-    rating: 4.8,
-    verified: true,
-    online: true,
-    city: "Kampala",
-    distance: 2.3,
-    bio: "A true gentleman for the discerning woman. Refined, attentive, and completely discreet.",
-    lat: BASE_LAT + 0.011,
-    lng: BASE_LNG + 0.005,
-    color: "#1a237e",
-    rate: 120000,
-    minBookingHours: 2,
-    availabilityStatus: "now",
-    isSpotlight: false,
-    isTonightsDeal: false,
-    dealDiscount: 0,
-    isNewInTown: false,
-    isHotStreak: true,
-    completedMeetups: 28,
-    responseRate: 95,
-    gender: "male",
-  },
-  {
-    id: "8",
-    name: "Marcus",
-    age: 35,
-    photoIndex: 1,
-    vibes: ["Luxury", "Travel", "Adventure"],
-    menu: ["Dinner Date", "City Tour", "Nightclub", "Pool/Swim"],
-    trustScore: 90,
-    rating: 4.7,
-    verified: true,
-    online: true,
-    city: "Kampala",
-    distance: 1.5,
-    bio: "Cultured, sophisticated, and ready for adventure. Business professional by day.",
-    lat: BASE_LAT - 0.007,
-    lng: BASE_LNG - 0.015,
-    color: "#4a148c",
-    rate: 140000,
-    minBookingHours: 3,
-    availabilityStatus: "tonight",
-    isSpotlight: true,
-    isTonightsDeal: false,
-    dealDiscount: 0,
-    isNewInTown: true,
-    isHotStreak: false,
-    completedMeetups: 15,
-    responseRate: 88,
-    gender: "male",
-  },
-];
+export interface RegisterInput {
+  phone: string;
+  pin: string;
+  name: string;
+  role: "seeker" | "companion";
+  city?: string;
+  gender?: CompanionGender;
+  age?: number;
+  referralCode?: string;
+}
 
-const SEEDED_MATCHES: Match[] = [
-  {
-    id: "seed1",
-    companion: COMPANIONS[0],
-    lastMessage: "Tonight sounds perfect ✨",
-    lastMessageTime: new Date(Date.now() - 7 * 60 * 1000),
-    unread: 1,
-    connectionType: "standard",
-  },
-  {
-    id: "seed2",
-    companion: COMPANIONS[4],
-    lastMessage: "My rate is confirmed, see you then",
-    lastMessageTime: new Date(Date.now() - 45 * 60 * 1000),
-    unread: 0,
-    connectionType: "super",
-  },
-];
+export interface BookingInput {
+  companionId: string;
+  activity: string;
+  dateLabel: string;
+  hours: number;
+  note?: string;
+  scheduledFor?: Date | null;
+}
 
-const NOW = Date.now();
-const INITIAL_MESSAGES: Record<string, Message[]> = {
-  seed1: [
-    { id: "sm1_1", matchId: "seed1", text: "Hi! Saw your profile — you seem like exactly what I'm looking for tonight 🌙", fromMe: true, time: new Date(NOW - 14 * 60 * 1000) },
-    { id: "sm1_2", matchId: "seed1", text: "Hi! Thanks for reaching out 💫 I'm available from 9pm. What did you have in mind?", fromMe: false, time: new Date(NOW - 12 * 60 * 1000) },
-    { id: "sm1_3", matchId: "seed1", text: "Dinner date at a rooftop? Your profile mentioned you love that 😊", fromMe: true, time: new Date(NOW - 10 * 60 * 1000) },
-    { id: "sm1_4", matchId: "seed1", text: "Tonight sounds perfect ✨", fromMe: false, time: new Date(NOW - 7 * 60 * 1000) },
-  ],
-  seed2: [
-    { id: "sm2_1", matchId: "seed2", text: "Hey, what's your rate for tonight?", fromMe: true, time: new Date(NOW - 60 * 60 * 1000) },
-    { id: "sm2_2", matchId: "seed2", text: "UGX 200,000/hr, minimum 2 hours. Available in Kampala tonight.", fromMe: false, time: new Date(NOW - 55 * 60 * 1000) },
-    { id: "sm2_3", matchId: "seed2", text: "That works. Nightclub, 3 hours — I'll send the booking.", fromMe: true, time: new Date(NOW - 50 * 60 * 1000) },
-    { id: "sm2_4", matchId: "seed2", text: "My rate is confirmed, see you then", fromMe: false, time: new Date(NOW - 45 * 60 * 1000) },
-  ],
-};
-
-const DEFAULT_FILTERS: Filters = {
-  maxDistance: 20,
+export const DEFAULT_FILTERS: Filters = {
+  maxDistance: 50,
   minRating: 0,
   verifiedOnly: false,
   status: "all",
   maxRate: 500000,
 };
 
-interface AppContextType {
-  companions: Companion[];
-  filteredCompanions: (isLadiesMode: boolean) => Companion[];
-  matches: Match[];
-  messages: Record<string, Message[]>;
-  userProfile: UserProfile;
-  filters: Filters;
-  userCity: string;
-  setUserCity: (city: string) => void;
-  addMatch: (companion: Companion, type: Match["connectionType"]) => void;
-  bookings: AppBooking[];
-  addBooking: (booking: Omit<AppBooking, "id" | "bookedAt" | "meetupCode" | "rated">) => void;
-  updateBookingStatus: (id: string, status: AppBooking["status"]) => void;
-  sendMessage: (matchId: string, text: string) => void;
-  toggleAvailability: () => void;
-  updateProfile: (updates: Partial<UserProfile>) => void;
-  updateFilters: (updates: Partial<Filters>) => void;
-  resetFilters: () => void;
-  likedIds: Set<string>;
-  passedIds: Set<string>;
-  likeCompanion: (id: string) => void;
-  passCompanion: (id: string) => void;
-  savedIds: Set<string>;
-  toggleSaved: (id: string) => void;
-}
-
-const AppContext = createContext<AppContextType | null>(null);
+export const DEFAULT_PRIVACY: PrivacyPrefs = { showDistance: true, showOnline: true, allowSaves: true, hideFromSearch: false };
+export const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = { messages: true, bookings: true, deals: true, live: false, radio: false };
 
 const DEFAULT_PROFILE: UserProfile = {
+  id: "",
+  phone: "",
   name: "You",
   bio: "",
   isCompanion: false,
@@ -417,282 +244,718 @@ const DEFAULT_PROFILE: UserProfile = {
   ghostMode: false,
   availableTonight: false,
   verified: false,
+  verificationStatus: "none",
   city: "Kampala",
   trustedContact: "",
+  language: "English",
+  privacy: DEFAULT_PRIVACY,
+  notificationPrefs: DEFAULT_NOTIFICATION_PREFS,
+  loyaltyPoints: 0,
+  referralCode: "",
+  isAdmin: false,
+  avatarColor: "#7A3CFF",
+  photoUrl: null,
+  gender: "other",
+  age: null,
+  companionProfile: null,
   walletBalance: 0,
   totalEarnings: 0,
   pendingPayout: 0,
 };
 
+// ───────────────────────── mappers ─────────────────────────
+
+export function toCompanion(c: CompanionCard): Companion {
+  return {
+    id: c.id,
+    name: c.name,
+    age: c.age ?? null,
+    photoIndex: c.photoIndex,
+    photoUrl: assetUrl(c.photoUrl),
+    vibes: c.vibes,
+    menu: c.menu,
+    trustScore: c.trustScore,
+    rating: c.rating,
+    reviewCount: c.reviewCount,
+    verified: c.verified,
+    online: c.online,
+    city: c.city,
+    distance: c.distanceKm ?? null,
+    bio: c.bio,
+    lat: c.lat ?? null,
+    lng: c.lng ?? null,
+    color: c.avatarColor,
+    rate: c.rate,
+    minBookingHours: c.minBookingHours,
+    availabilityStatus: c.availabilityStatus,
+    isSpotlight: c.isSpotlight,
+    isTonightsDeal: c.isTonightsDeal,
+    dealDiscount: c.dealDiscount,
+    isNewInTown: c.isNewInTown,
+    isHotStreak: c.isHotStreak,
+    completedMeetups: c.completedMeetups,
+    responseRate: c.responseRate,
+    gender: c.gender,
+    isLiked: c.isLiked,
+    isSaved: c.isSaved,
+    connectionId: c.connectionId ?? null,
+  };
+}
+
+export function partyToCompanion(p: PartySummary): Companion {
+  return {
+    id: p.id,
+    name: p.name,
+    age: null,
+    photoIndex: p.photoIndex ?? 0,
+    photoUrl: assetUrl(p.photoUrl),
+    vibes: [],
+    menu: [],
+    trustScore: 0,
+    rating: 0,
+    reviewCount: 0,
+    verified: p.verified,
+    online: p.online,
+    city: p.city,
+    distance: null,
+    bio: "",
+    lat: null,
+    lng: null,
+    color: p.avatarColor,
+    rate: p.rate ?? 0,
+    minBookingHours: 1,
+    availabilityStatus: p.availabilityStatus ?? "offline",
+    isSpotlight: false,
+    isTonightsDeal: false,
+    dealDiscount: 0,
+    isNewInTown: false,
+    isHotStreak: false,
+    completedMeetups: 0,
+    responseRate: 0,
+    gender: "other",
+    isLiked: false,
+    isSaved: false,
+    connectionId: null,
+  };
+}
+
+export function toMatch(c: ApiConnection): Match {
+  return {
+    id: c.id,
+    companion: partyToCompanion(c.other),
+    lastMessage: c.lastMessage,
+    lastMessageTime: new Date(c.lastMessageAt),
+    unread: c.unread,
+    connectionType: c.type,
+    status: c.status,
+    isSeekerSide: c.isSeekerSide,
+  };
+}
+
+export function formatClock(date: Date): string {
+  return `${date.getHours().toString().padStart(2, "0")}:${date.getMinutes().toString().padStart(2, "0")}`;
+}
+
+export function relativeTime(input: string | Date): string {
+  const date = typeof input === "string" ? new Date(input) : input;
+  const diff = Date.now() - date.getTime();
+  if (diff < 60_000) return "Just now";
+  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`;
+  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`;
+  if (diff < 172_800_000) return "Yesterday";
+  if (diff < 7 * 86_400_000) return `${Math.floor(diff / 86_400_000)} days ago`;
+  return date.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+}
+
+export function toAppBooking(b: ApiBooking): AppBooking {
+  const scheduledFor = b.scheduledFor ? new Date(b.scheduledFor) : null;
+  const time = scheduledFor
+    ? scheduledFor.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })
+    : b.status === "pending"
+      ? "Awaiting confirmation"
+      : b.dateLabel === "Tonight"
+        ? "Tonight"
+        : "To be confirmed";
+  return {
+    id: b.id,
+    connectionId: b.connectionId ?? null,
+    companionId: b.companionId,
+    otherId: b.other.id,
+    isSeekerSide: b.isSeekerSide,
+    companionName: b.other.name,
+    companionColor: b.other.avatarColor,
+    companionInitial: b.other.name[0]?.toUpperCase() ?? "?",
+    activity: b.activity,
+    date: b.dateLabel,
+    time,
+    hours: b.hours,
+    rate: b.rate,
+    total: b.total,
+    status: b.status,
+    city: b.city,
+    bookedAt: relativeTime(b.createdAt),
+    safetyActive: b.safetyActive,
+    meetupCode: b.meetupCode,
+    rated: b.rated,
+    note: b.note,
+    scheduledFor,
+    createdAt: new Date(b.createdAt),
+  };
+}
+
+export function toProfile(u: ApiUser | null | undefined): UserProfile {
+  if (!u) return DEFAULT_PROFILE;
+  const primary = u.photos.find((p) => p.isPrimary) ?? u.photos[0];
+  return {
+    id: u.id,
+    phone: u.phone,
+    name: u.name,
+    bio: u.bio,
+    isCompanion: u.role === "companion",
+    isLadiesMode: u.isLadiesMode,
+    ghostMode: u.ghostMode,
+    availableTonight: u.availableTonight,
+    verified: u.verified,
+    verificationStatus: u.verificationStatus,
+    city: u.city,
+    trustedContact: u.trustedContact,
+    language: u.language,
+    privacy: u.privacy,
+    notificationPrefs: u.notificationPrefs,
+    loyaltyPoints: u.loyaltyPoints,
+    referralCode: u.referralCode,
+    isAdmin: u.isAdmin,
+    avatarColor: u.avatarColor,
+    photoUrl: assetUrl(primary?.url ?? null),
+    gender: u.gender,
+    age: u.age ?? null,
+    companionProfile: u.companionProfile ?? null,
+    walletBalance: 0,
+    totalEarnings: 0,
+    pendingPayout: 0,
+  };
+}
+
+export function formatUGX(amount: number): string {
+  return `UGX ${amount.toLocaleString()}`;
+}
+
+// ───────────────────────── context ─────────────────────────
+
+interface AppContextType {
+  authStatus: AuthStatus;
+  serverError: string | null;
+  me: ApiUser | null;
+  userProfile: UserProfile;
+  signIn: (phone: string, pin: string) => Promise<void>;
+  register: (input: RegisterInput) => Promise<void>;
+  signOut: () => Promise<void>;
+  deleteAccount: () => Promise<void>;
+  refreshMe: () => Promise<void>;
+
+  companions: Companion[];
+  companionsLoading: boolean;
+  filteredCompanions: (isLadiesMode: boolean) => Companion[];
+  refreshCompanions: () => void;
+  browseCity: string;
+  setBrowseCity: (city: string) => void;
+  stories: AppStory[];
+  deals: Companion[];
+
+  matches: Match[];
+  matchesLoading: boolean;
+  addMatch: (companion: Companion, type?: ConnectionType, message?: string) => Promise<Match>;
+  sendMessage: (matchId: string, text: string, kind?: "text" | "voice") => Promise<void>;
+
+  bookings: AppBooking[];
+  bookingsLoading: boolean;
+  addBooking: (input: BookingInput) => Promise<AppBooking>;
+  updateBookingStatus: (id: string, action: BookingActionRequestAction) => Promise<void>;
+
+  toggleAvailability: () => Promise<void>;
+  updateProfile: (updates: ProfileUpdate) => Promise<void>;
+  updateCompanionProfile: (updates: UpdateCompanionProfileRequest) => Promise<void>;
+
+  filters: Filters;
+  updateFilters: (updates: Partial<Filters>) => void;
+  resetFilters: () => void;
+
+  likedIds: Set<string>;
+  passedIds: Set<string>;
+  likeCompanion: (id: string) => Promise<void>;
+  passCompanion: (id: string) => Promise<void>;
+  savedIds: Set<string>;
+  savedCompanions: Companion[];
+  toggleSaved: (id: string) => Promise<void>;
+
+  userCity: string;
+  setUserCity: (city: string) => void;
+  coords: { lat: number; lng: number } | null;
+  unread: { notifications: number; messages: number };
+  invalidate: (keys: ReadonlyArray<readonly unknown[]>) => void;
+}
+
+const AppContext = createContext<AppContextType | null>(null);
+
 export function AppProvider({ children }: { children: React.ReactNode }) {
-  const [matches, setMatches] = useState<Match[]>(SEEDED_MATCHES);
-  const [messages, setMessages] =
-    useState<Record<string, Message[]>>(INITIAL_MESSAGES);
-  const [userProfile, setUserProfile] =
-    useState<UserProfile>(DEFAULT_PROFILE);
+  const queryClient = useQueryClient();
+  const [token, setToken] = useState<string | null | undefined>(undefined);
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
-  const [likedIds, setLikedIds] = useState<Set<string>>(new Set());
-  const [passedIds, setPassedIds] = useState<Set<string>>(new Set());
-  const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
-  const [bookings, setBookings] = useState<AppBooking[]>([]);
-  const [userCity, setUserCity] = useState<string>("");
+  const [userCity, setUserCityState] = useState<string>("");
+  const [browseCity, setBrowseCityState] = useState<string>("");
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const locationRequested = useRef(false);
 
   useEffect(() => {
-    loadData();
-  }, []);
-
-  const loadData = async () => {
-    try {
-      const [storedMatches, storedMessages, storedProfile, storedLiked, storedPassed, storedSaved, storedFilters, storedBookings] =
-        await Promise.all([
-          AsyncStorage.getItem("matches"),
-          AsyncStorage.getItem("messages"),
-          AsyncStorage.getItem("userProfile"),
-          AsyncStorage.getItem("likedIds"),
-          AsyncStorage.getItem("passedIds"),
-          AsyncStorage.getItem("savedIds"),
+    (async () => {
+      try {
+        const [storedToken, storedFilters] = await Promise.all([
+          AsyncStorage.getItem(AUTH_TOKEN_KEY),
           AsyncStorage.getItem("filters"),
-          AsyncStorage.getItem("bookings"),
         ]);
-
-      if (storedMatches) {
-        const parsed = JSON.parse(storedMatches);
-        setMatches(parsed.map((m: Match) => ({ ...m, lastMessageTime: new Date(m.lastMessageTime) })));
+        if (storedFilters) setFilters({ ...DEFAULT_FILTERS, ...JSON.parse(storedFilters) });
+        setToken(storedToken);
+      } catch {
+        setToken(null);
       }
-      if (storedMessages) {
-        const parsed = JSON.parse(storedMessages);
-        const restored: Record<string, Message[]> = {};
-        for (const key of Object.keys(parsed)) {
-          restored[key] = parsed[key].map((msg: Message) => ({ ...msg, time: new Date(msg.time) }));
+    })();
+  }, []);
+
+  const hasToken = !!token;
+  const meQuery = useGetMe({ query: { queryKey: getGetMeQueryKey(), enabled: hasToken, retry: false, staleTime: 30_000 } });
+
+  const clearSession = useCallback(async () => {
+    await AsyncStorage.removeItem(AUTH_TOKEN_KEY);
+    setToken(null);
+    queryClient.clear();
+  }, [queryClient]);
+
+  useEffect(() => {
+    if (meQuery.error && isUnauthorized(meQuery.error)) void clearSession();
+  }, [meQuery.error, clearSession]);
+
+  const me = meQuery.data ?? null;
+  const authStatus: AuthStatus =
+    token === undefined
+      ? "loading"
+      : !token
+        ? "signedOut"
+        : me
+          ? "signedIn"
+          : meQuery.isError
+            ? isUnauthorized(meQuery.error)
+              ? "signedOut"
+              : "signedIn"
+            : "loading";
+  const signedIn = authStatus === "signedIn" && !!me;
+  const serverError = meQuery.isError && !isUnauthorized(meQuery.error) ? "Can't reach NightMap. Showing what we have." : null;
+
+  const userProfile = useMemo(() => toProfile(me), [me]);
+
+  // Resolve the city we browse: explicit choice → profile city.
+  const effectiveCity = browseCity || userProfile.city || "Kampala";
+
+  // One-time location fix after sign-in: heartbeat with coordinates + nearest city.
+  useEffect(() => {
+    if (!signedIn || locationRequested.current) return;
+    locationRequested.current = true;
+    (async () => {
+      try {
+        const { status } = await Location.getForegroundPermissionsAsync();
+        if (status !== "granted") {
+          await heartbeat({});
+          return;
         }
-        setMessages(restored);
+        const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        const next = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        setCoords(next);
+        const city = nearestCity(next.lat, next.lng);
+        setUserCityState(city);
+        await heartbeat({ lat: next.lat, lng: next.lng });
+      } catch {
+        try {
+          await heartbeat({});
+        } catch {
+          // offline; ignore
+        }
       }
-      if (storedProfile) setUserProfile(JSON.parse(storedProfile));
-      if (storedLiked) setLikedIds(new Set(JSON.parse(storedLiked)));
-      if (storedPassed) setPassedIds(new Set(JSON.parse(storedPassed)));
-      if (storedSaved) setSavedIds(new Set(JSON.parse(storedSaved)));
-      if (storedFilters) setFilters(JSON.parse(storedFilters));
-      if (storedBookings) setBookings(JSON.parse(storedBookings));
-    } catch (_) {}
-  };
+    })();
+  }, [signedIn]);
 
-  const saveMatches = async (newMatches: Match[]) => {
-    await AsyncStorage.setItem("matches", JSON.stringify(newMatches));
-  };
+  // Presence heartbeat every 2 minutes while signed in.
+  useEffect(() => {
+    if (!signedIn) return;
+    const id = setInterval(() => {
+      heartbeat(coords ? { lat: coords.lat, lng: coords.lng } : {}).catch(() => {});
+    }, 120_000);
+    return () => clearInterval(id);
+  }, [signedIn, coords]);
 
-  const saveMessages = async (newMessages: Record<string, Message[]>) => {
-    await AsyncStorage.setItem("messages", JSON.stringify(newMessages));
-  };
+  const companionParams = useMemo<ListCompanionsParams>(
+    () => ({
+      gender: userProfile.isLadiesMode ? "male" : "female",
+      city: effectiveCity,
+      status: filters.status,
+      verifiedOnly: filters.verifiedOnly || undefined,
+      minRating: filters.minRating > 0 ? filters.minRating : undefined,
+      maxRate: filters.maxRate < 500000 ? filters.maxRate : undefined,
+      maxDistance: filters.maxDistance < 50 ? filters.maxDistance : undefined,
+      lat: coords?.lat,
+      lng: coords?.lng,
+    }),
+    [userProfile.isLadiesMode, effectiveCity, filters, coords],
+  );
 
-  const filteredCompanions = useCallback((isLadiesMode: boolean): Companion[] => {
-    return COMPANIONS.filter((c) => {
-      if (isLadiesMode && c.gender !== "male") return false;
-      if (!isLadiesMode && c.gender !== "female") return false;
-      if (c.distance > filters.maxDistance) return false;
-      if (c.rating < filters.minRating) return false;
-      if (filters.verifiedOnly && !c.verified) return false;
-      if (filters.status !== "all" && c.availabilityStatus !== filters.status) return false;
-      if (c.rate > filters.maxRate) return false;
-      return true;
-    });
-  }, [filters]);
+  const companionsQuery = useListCompanions(companionParams, {
+    query: {
+      queryKey: getListCompanionsQueryKey(companionParams),
+      enabled: signedIn,
+      refetchInterval: 30_000,
+      staleTime: 10_000,
+      placeholderData: (prev) => prev,
+    },
+  });
+  const storiesQuery = useListStories(
+    { city: effectiveCity },
+    { query: { queryKey: getListStoriesQueryKey({ city: effectiveCity }), enabled: signedIn, refetchInterval: 60_000, staleTime: 30_000 } },
+  );
+  const dealsQuery = useListDeals(
+    { city: effectiveCity },
+    { query: { queryKey: getListDealsQueryKey({ city: effectiveCity }), enabled: signedIn, refetchInterval: 60_000, staleTime: 30_000 } },
+  );
+  const connectionsQuery = useListConnections({
+    query: { queryKey: getListConnectionsQueryKey(), enabled: signedIn, refetchInterval: 8_000, staleTime: 4_000 },
+  });
+  const bookingsQuery = useListBookings({
+    query: { queryKey: getListBookingsQueryKey(), enabled: signedIn, refetchInterval: 15_000, staleTime: 5_000 },
+  });
+  const swipesQuery = useGetMySwipes({ query: { queryKey: getGetMySwipesQueryKey(), enabled: signedIn, staleTime: 60_000 } });
+  const savedQuery = useGetSavedCompanions({ query: { queryKey: getGetSavedCompanionsQueryKey(), enabled: signedIn, staleTime: 30_000 } });
+  const unreadQuery = useGetUnreadCount({ query: { queryKey: getGetUnreadCountQueryKey(), enabled: signedIn, refetchInterval: 10_000 } });
 
-  const addMatch = useCallback((companion: Companion, type: Match["connectionType"] = "standard") => {
-    setMatches((prev) => {
-      if (prev.some((m) => m.companion.id === companion.id)) return prev;
-      const newMatch: Match = {
-        id: Date.now().toString(),
-        companion,
-        lastMessage: type === "paidDm" ? "Paid DM sent" : "Connection requested",
-        lastMessageTime: new Date(),
-        unread: 1,
-        connectionType: type,
+  const companions = useMemo(() => (companionsQuery.data ?? []).map(toCompanion), [companionsQuery.data]);
+  const stories = useMemo<AppStory[]>(
+    () =>
+      (storiesQuery.data ?? []).map((s) => ({
+        id: s.id,
+        companion: toCompanion(s.companion),
+        text: s.text,
+        createdAt: new Date(s.createdAt),
+        expiresAt: new Date(s.expiresAt),
+      })),
+    [storiesQuery.data],
+  );
+  const deals = useMemo(() => (dealsQuery.data ?? []).map(toCompanion), [dealsQuery.data]);
+  const matches = useMemo(() => (connectionsQuery.data ?? []).map(toMatch), [connectionsQuery.data]);
+  const bookings = useMemo(() => (bookingsQuery.data ?? []).map(toAppBooking), [bookingsQuery.data]);
+  const likedIds = useMemo(() => new Set(swipesQuery.data?.liked ?? []), [swipesQuery.data]);
+  const passedIds = useMemo(() => new Set(swipesQuery.data?.passed ?? []), [swipesQuery.data]);
+  const savedCompanions = useMemo(() => (savedQuery.data ?? []).map(toCompanion), [savedQuery.data]);
+  const savedIds = useMemo(() => new Set(savedCompanions.map((c) => c.id)), [savedCompanions]);
+  const unread = useMemo(
+    () => ({ notifications: unreadQuery.data?.notifications ?? 0, messages: unreadQuery.data?.messages ?? 0 }),
+    [unreadQuery.data],
+  );
+
+  const invalidate = useCallback(
+    (keys: ReadonlyArray<readonly unknown[]>) => {
+      for (const key of keys) void queryClient.invalidateQueries({ queryKey: key });
+    },
+    [queryClient],
+  );
+
+  // ── auth ──
+  const adoptSession = useCallback(
+    async (nextToken: string, user: ApiUser) => {
+      await AsyncStorage.setItem(AUTH_TOKEN_KEY, nextToken);
+      await AsyncStorage.setItem(ONBOARDED_KEY, "true");
+      queryClient.setQueryData(getGetMeQueryKey(), user);
+      locationRequested.current = false;
+      setToken(nextToken);
+    },
+    [queryClient],
+  );
+
+  const signIn = useCallback(
+    async (phone: string, pin: string) => {
+      const res = await apiLogin({ phone, pin });
+      await adoptSession(res.token, res.user);
+    },
+    [adoptSession],
+  );
+
+  const register = useCallback(
+    async (input: RegisterInput) => {
+      const body: RegisterRequest = {
+        phone: input.phone,
+        pin: input.pin,
+        name: input.name,
+        role: input.role,
+        city: input.city,
+        gender: input.gender,
+        age: input.age,
+        referralCode: input.referralCode,
       };
-      const updated = [newMatch, ...prev];
-      saveMatches(updated);
-      return updated;
-    });
+      const res = await apiRegister(body);
+      await adoptSession(res.token, res.user);
+    },
+    [adoptSession],
+  );
+
+  const signOut = useCallback(async () => {
+    try {
+      await apiLogout();
+    } catch {
+      // token may already be invalid
+    }
+    await clearSession();
+  }, [clearSession]);
+
+  const deleteAccount = useCallback(async () => {
+    await deleteMe();
+    await AsyncStorage.multiRemove([AUTH_TOKEN_KEY, ONBOARDED_KEY, "filters", "profilePreferences"]);
+    setToken(null);
+    queryClient.clear();
+  }, [queryClient]);
+
+  const refreshMe = useCallback(async () => {
+    await queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
+  }, [queryClient]);
+
+  // ── profile ──
+  const updateProfile = useCallback(
+    async (updates: ProfileUpdate) => {
+      const body: UpdateMeRequest = {};
+      if (updates.name !== undefined) body.name = updates.name;
+      if (updates.bio !== undefined) body.bio = updates.bio;
+      if (updates.city !== undefined) body.city = updates.city;
+      if (updates.lat !== undefined) body.lat = updates.lat;
+      if (updates.lng !== undefined) body.lng = updates.lng;
+      if (updates.isCompanion !== undefined) body.role = updates.isCompanion ? "companion" : "seeker";
+      if (updates.gender !== undefined) body.gender = updates.gender;
+      if (updates.age !== undefined && updates.age !== null) body.age = updates.age;
+      if (updates.isLadiesMode !== undefined) body.isLadiesMode = updates.isLadiesMode;
+      if (updates.ghostMode !== undefined) body.ghostMode = updates.ghostMode;
+      if (updates.availableTonight !== undefined) body.availableTonight = updates.availableTonight;
+      if (updates.trustedContact !== undefined) body.trustedContact = updates.trustedContact;
+      if (updates.language !== undefined) body.language = updates.language;
+      if (updates.privacy !== undefined) body.privacy = updates.privacy;
+      if (updates.notificationPrefs !== undefined) body.notificationPrefs = updates.notificationPrefs;
+
+      const key = getGetMeQueryKey();
+      const previous = queryClient.getQueryData<ApiUser>(key);
+      if (previous) {
+        queryClient.setQueryData<ApiUser>(key, {
+          ...previous,
+          ...(body.name !== undefined ? { name: body.name } : {}),
+          ...(body.bio !== undefined ? { bio: body.bio } : {}),
+          ...(body.city !== undefined ? { city: body.city } : {}),
+          ...(body.role !== undefined ? { role: body.role } : {}),
+          ...(body.gender !== undefined ? { gender: body.gender } : {}),
+          ...(body.isLadiesMode !== undefined ? { isLadiesMode: body.isLadiesMode } : {}),
+          ...(body.ghostMode !== undefined ? { ghostMode: body.ghostMode } : {}),
+          ...(body.availableTonight !== undefined ? { availableTonight: body.availableTonight } : {}),
+          ...(body.trustedContact !== undefined ? { trustedContact: body.trustedContact } : {}),
+          ...(body.language !== undefined ? { language: body.language } : {}),
+          ...(body.privacy !== undefined ? { privacy: body.privacy } : {}),
+          ...(body.notificationPrefs !== undefined ? { notificationPrefs: body.notificationPrefs } : {}),
+        });
+      }
+      try {
+        const updated = await updateMe(body);
+        queryClient.setQueryData(key, updated);
+      } catch (err) {
+        if (previous) queryClient.setQueryData(key, previous);
+        throw err;
+      }
+    },
+    [queryClient],
+  );
+
+  const updateCompanionProfile = useCallback(
+    async (updates: UpdateCompanionProfileRequest) => {
+      const updated = await apiUpdateCompanionProfile(updates);
+      queryClient.setQueryData(getGetMeQueryKey(), updated);
+      invalidate([getListCompanionsQueryKey(companionParams), getListDealsQueryKey({ city: effectiveCity })]);
+    },
+    [queryClient, invalidate, companionParams, effectiveCity],
+  );
+
+  const toggleAvailability = useCallback(async () => {
+    await updateProfile({ availableTonight: !userProfile.availableTonight });
+  }, [updateProfile, userProfile.availableTonight]);
+
+  // ── discovery ──
+  const filteredCompanions = useCallback((_isLadiesMode: boolean): Companion[] => companions, [companions]);
+  const refreshCompanions = useCallback(() => {
+    void companionsQuery.refetch();
+  }, [companionsQuery]);
+
+  const setBrowseCity = useCallback((city: string) => setBrowseCityState(city), []);
+  const setUserCity = useCallback((city: string) => {
+    setUserCityState(city);
+    setBrowseCityState((prev) => prev || city);
   }, []);
 
-  const addBooking = useCallback((booking: Omit<AppBooking, "id" | "bookedAt" | "meetupCode" | "rated">) => {
-    const created: AppBooking = {
-      ...booking,
-      id: `booking-${Date.now()}`,
-      bookedAt: "Just now",
-      meetupCode: `NM-${Math.floor(1000 + Math.random() * 9000)}`,
-      rated: false,
-    };
-    setBookings((prev) => {
-      const updated = [created, ...prev];
-      AsyncStorage.setItem("bookings", JSON.stringify(updated));
-      return updated;
-    });
-  }, []);
-
-  const updateBookingStatus = useCallback((id: string, status: AppBooking["status"]) => {
-    setBookings((prev) => {
-      const updated = prev.map((booking) =>
-        booking.id === id
-          ? { ...booking, status, safetyActive: status === "active" }
-          : booking
-      );
-      AsyncStorage.setItem("bookings", JSON.stringify(updated));
-      return updated;
-    });
-  }, []);
-
-  const sendMessage = useCallback((matchId: string, text: string) => {
-    const msg: Message = {
-      id: Date.now().toString() + Math.random().toString(36).substr(2, 5),
-      matchId,
-      text,
-      fromMe: true,
-      time: new Date(),
-    };
-    setMessages((prev) => {
-      const updated = { ...prev, [matchId]: [...(prev[matchId] ?? []), msg] };
-      saveMessages(updated);
-      return updated;
-    });
-    setMatches((prev) => {
-      const updated = prev.map((m) =>
-        m.id === matchId
-          ? { ...m, lastMessage: text, lastMessageTime: new Date(), unread: 0 }
-          : m
-      );
-      saveMatches(updated);
-      return updated;
-    });
-
-    setTimeout(() => {
-      const replies = [
-        "Tonight sounds perfect ✨",
-        "I'm available from 9pm",
-        "Let's meet at the venue",
-        "I'll send you my location",
-        "Looking forward to it",
-        "My rate is confirmed, see you then",
-      ];
-      const reply: Message = {
-        id: Date.now().toString() + Math.random().toString(36).substr(2, 5),
-        matchId,
-        text: replies[Math.floor(Math.random() * replies.length)],
-        fromMe: false,
-        time: new Date(),
-      };
-      setMessages((prev) => {
-        const updated = { ...prev, [matchId]: [...(prev[matchId] ?? []), reply] };
-        saveMessages(updated);
-        return updated;
+  const applySwipe = useCallback(
+    async (id: string, action: "like" | "pass") => {
+      const key = getGetMySwipesQueryKey();
+      const previous = queryClient.getQueryData<SwipeSummary>(key) ?? { liked: [], passed: [] };
+      queryClient.setQueryData<SwipeSummary>(key, {
+        liked: action === "like" ? [...new Set([...previous.liked, id])] : previous.liked.filter((x) => x !== id),
+        passed: action === "pass" ? [...new Set([...previous.passed, id])] : previous.passed.filter((x) => x !== id),
       });
-      setMatches((prev) => {
-        const updated = prev.map((m) =>
-          m.id === matchId
-            ? { ...m, lastMessage: reply.text, lastMessageTime: new Date(), unread: 1 }
-            : m
-        );
-        saveMatches(updated);
-        return updated;
+      try {
+        const summary = await swipeCompanion(id, { action });
+        queryClient.setQueryData(key, summary);
+      } catch (err) {
+        queryClient.setQueryData(key, previous);
+        throw err;
+      }
+    },
+    [queryClient],
+  );
+
+  const likeCompanion = useCallback((id: string) => applySwipe(id, "like"), [applySwipe]);
+  const passCompanion = useCallback((id: string) => applySwipe(id, "pass"), [applySwipe]);
+
+  const toggleSaved = useCallback(
+    async (id: string) => {
+      const key = getGetSavedCompanionsQueryKey();
+      const previous = queryClient.getQueryData<CompanionCard[]>(key) ?? [];
+      const exists = previous.some((c) => c.id === id);
+      const card = companionsQuery.data?.find((c) => c.id === id) ?? dealsQuery.data?.find((c) => c.id === id);
+      queryClient.setQueryData<CompanionCard[]>(
+        key,
+        exists ? previous.filter((c) => c.id !== id) : card ? [card, ...previous] : previous,
+      );
+      try {
+        await toggleSaveCompanion(id);
+      } finally {
+        void queryClient.invalidateQueries({ queryKey: key });
+      }
+    },
+    [queryClient, companionsQuery.data, dealsQuery.data],
+  );
+
+  // ── connections / chat ──
+  const addMatch = useCallback(
+    async (companion: Companion, type: ConnectionType = "standard", message?: string) => {
+      const connection = await createConnection({ companionId: companion.id, type, message });
+      invalidate([getListConnectionsQueryKey(), getListCompanionsQueryKey(companionParams)]);
+      return toMatch(connection);
+    },
+    [invalidate, companionParams],
+  );
+
+  const sendMessage = useCallback(
+    async (matchId: string, text: string, kind: "text" | "voice" = "text") => {
+      await apiSendMessage(matchId, { text, kind });
+      invalidate([getListMessagesQueryKey(matchId), getListConnectionsQueryKey()]);
+    },
+    [invalidate],
+  );
+
+  // ── bookings ──
+  const addBooking = useCallback(
+    async (input: BookingInput) => {
+      const booking = await createBooking({
+        companionId: input.companionId,
+        activity: input.activity,
+        dateLabel: input.dateLabel,
+        hours: input.hours,
+        note: input.note,
+        scheduledFor: input.scheduledFor ? input.scheduledFor.toISOString() : undefined,
       });
-    }, 1500 + Math.random() * 2000);
-  }, []);
+      invalidate([getListBookingsQueryKey(), getListConnectionsQueryKey(), getListCompanionsQueryKey(companionParams)]);
+      return toAppBooking(booking);
+    },
+    [invalidate, companionParams],
+  );
 
-  const toggleAvailability = useCallback(() => {
-    setUserProfile((prev) => {
-      const updated = { ...prev, availableTonight: !prev.availableTonight };
-      AsyncStorage.setItem("userProfile", JSON.stringify(updated));
-      return updated;
-    });
-  }, []);
+  const updateBookingStatus = useCallback(
+    async (id: string, action: BookingActionRequestAction) => {
+      await updateBooking(id, { action });
+      invalidate([getListBookingsQueryKey(), getListConnectionsQueryKey(), getGetMeQueryKey()]);
+    },
+    [invalidate],
+  );
 
-  const updateProfile = useCallback((updates: Partial<UserProfile>) => {
-    setUserProfile((prev) => {
-      const updated = { ...prev, ...updates };
-      AsyncStorage.setItem("userProfile", JSON.stringify(updated));
-      return updated;
-    });
-  }, []);
-
+  // ── filters ──
   const updateFilters = useCallback((updates: Partial<Filters>) => {
     setFilters((prev) => {
-      const updated = { ...prev, ...updates };
-      AsyncStorage.setItem("filters", JSON.stringify(updated));
-      return updated;
+      const next = { ...prev, ...updates };
+      AsyncStorage.setItem("filters", JSON.stringify(next)).catch(() => {});
+      return next;
     });
   }, []);
 
   const resetFilters = useCallback(() => {
     setFilters(DEFAULT_FILTERS);
-    AsyncStorage.removeItem("filters");
+    AsyncStorage.removeItem("filters").catch(() => {});
   }, []);
 
-  const likeCompanion = useCallback((id: string) => {
-    setLikedIds((prev) => {
-      const updated = new Set(prev);
-      updated.add(id);
-      AsyncStorage.setItem("likedIds", JSON.stringify([...updated]));
-      return updated;
-    });
-  }, []);
-
-  const passCompanion = useCallback((id: string) => {
-    setPassedIds((prev) => {
-      const updated = new Set(prev);
-      updated.add(id);
-      AsyncStorage.setItem("passedIds", JSON.stringify([...updated]));
-      return updated;
-    });
-  }, []);
-
-  const toggleSaved = useCallback((id: string) => {
-    setSavedIds((prev) => {
-      const updated = new Set(prev);
-      if (updated.has(id)) updated.delete(id);
-      else updated.add(id);
-      AsyncStorage.setItem("savedIds", JSON.stringify([...updated]));
-      return updated;
-    });
-  }, []);
-
-  return (
-    <AppContext.Provider
-      value={{
-        companions: COMPANIONS,
-        filteredCompanions,
-        matches,
-        messages,
-        userProfile,
-        filters,
-        userCity,
-        setUserCity,
-        addMatch,
-        bookings,
-        addBooking,
-        updateBookingStatus,
-        sendMessage,
-        toggleAvailability,
-        updateProfile,
-        updateFilters,
-        resetFilters,
-        likedIds,
-        passedIds,
-        likeCompanion,
-        passCompanion,
-        savedIds,
-        toggleSaved,
-      }}
-    >
-      {children}
-    </AppContext.Provider>
+  const value = useMemo<AppContextType>(
+    () => ({
+      authStatus,
+      serverError,
+      me,
+      userProfile,
+      signIn,
+      register,
+      signOut,
+      deleteAccount,
+      refreshMe,
+      companions,
+      companionsLoading: companionsQuery.isLoading,
+      filteredCompanions,
+      refreshCompanions,
+      browseCity: effectiveCity,
+      setBrowseCity,
+      stories,
+      deals,
+      matches,
+      matchesLoading: connectionsQuery.isLoading,
+      addMatch,
+      sendMessage,
+      bookings,
+      bookingsLoading: bookingsQuery.isLoading,
+      addBooking,
+      updateBookingStatus,
+      toggleAvailability,
+      updateProfile,
+      updateCompanionProfile,
+      filters,
+      updateFilters,
+      resetFilters,
+      likedIds,
+      passedIds,
+      likeCompanion,
+      passCompanion,
+      savedIds,
+      savedCompanions,
+      toggleSaved,
+      userCity,
+      setUserCity,
+      coords,
+      unread,
+      invalidate,
+    }),
+    [
+      authStatus, serverError, me, userProfile, signIn, register, signOut, deleteAccount, refreshMe,
+      companions, companionsQuery.isLoading, filteredCompanions, refreshCompanions, effectiveCity, setBrowseCity,
+      stories, deals, matches, connectionsQuery.isLoading, addMatch, sendMessage, bookings, bookingsQuery.isLoading,
+      addBooking, updateBookingStatus, toggleAvailability, updateProfile, updateCompanionProfile, filters, updateFilters,
+      resetFilters, likedIds, passedIds, likeCompanion, passCompanion, savedIds, savedCompanions, toggleSaved, userCity,
+      setUserCity, coords, unread, invalidate,
+    ],
   );
+
+  return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }
 
 export function useApp() {
   const ctx = useContext(AppContext);
   if (!ctx) throw new Error("useApp must be used inside AppProvider");
   return ctx;
-}
-
-export function formatUGX(amount: number): string {
-  return `UGX ${amount.toLocaleString()}`;
 }

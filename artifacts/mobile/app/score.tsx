@@ -1,8 +1,8 @@
-import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import React, { useRef } from "react";
+import React, { useEffect, useRef } from "react";
 import {
+  ActivityIndicator,
   Animated,
   Platform,
   ScrollView,
@@ -12,8 +12,9 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { getGetScoreQueryKey, useGetScore } from "@workspace/api-client-react";
 import { useColors } from "@workspace/nightmap-design-system/hooks/use-colors";
-import { useApp } from "@/context/AppContext";
+import { relativeTime } from "@/context/AppContext";
 
 const TIERS = [
   { name: "Bronze",   min: 0,    max: 199,  color: "#CD7F32", emoji: "🥉" },
@@ -21,10 +22,9 @@ const TIERS = [
   { name: "Gold",     min: 500,  max: 999,  color: "#FFC400", emoji: "🥇" },
   { name: "Platinum", min: 1000, max: 9999, color: "#E5E4E2", emoji: "💎" },
 ];
-
 const EARN_ACTIONS = [
   { icon: "checkmark-circle-outline", color: "#1FBF6B", label: "Complete a meetup",       pts: "+100 pts" },
-  { icon: "star-outline",             color: "#FFC400", label: "Leave a Chemistry rating", pts: "+25 pts"  },
+  { icon: "star-outline",             color: "#FFC400", label: "Leave a Chemistry rating", pts: "+50–100 pts" },
   { icon: "people-outline",           color: "#3DA9FF", label: "Refer a friend",           pts: "+200 pts" },
   { icon: "shield-checkmark-outline", color: "#FF4E62", label: "Get verified",             pts: "+150 pts" },
   { icon: "calendar-outline",         color: "#7A3CFF", label: "7-day login streak",       pts: "+50 pts"  },
@@ -32,15 +32,16 @@ const EARN_ACTIONS = [
   { icon: "radio-outline",            color: "#1FBF6B", label: "Join a Radio lounge",      pts: "+10 pts"  },
   { icon: "videocam-outline",         color: "#3DA9FF", label: "Watch a live stream",      pts: "+5 pts"   },
 ];
-
-const RECENT_ACTIVITY = [
-  { icon: "checkmark-circle", color: "#1FBF6B", label: "Meetup with Amara completed",   pts: "+100", time: "2 days ago" },
-  { icon: "star",             color: "#FFC400", label: "Chemistry score submitted",      pts: "+25",  time: "3 days ago" },
-  { icon: "calendar",         color: "#7A3CFF", label: "5-day login streak",             pts: "+30",  time: "5 days ago" },
-  { icon: "heart",            color: "#FF8A3D", label: "First booking of the week",      pts: "+30",  time: "1 week ago" },
-  { icon: "shield-checkmark", color: "#FF4E62", label: "Profile verification submitted", pts: "+150", time: "2 weeks ago" },
-];
-
+const REASON_STYLE: Record<string, { icon: string; color: string }> = {
+  meetup: { icon: "checkmark-circle", color: "#1FBF6B" },
+  review: { icon: "star", color: "#FFC400" },
+  referral: { icon: "people", color: "#3DA9FF" },
+  verified: { icon: "shield-checkmark", color: "#FF4E62" },
+  streak: { icon: "calendar", color: "#7A3CFF" },
+  first_booking_week: { icon: "heart", color: "#FF8A3D" },
+  lounge: { icon: "radio", color: "#1FBF6B" },
+  stream: { icon: "videocam", color: "#3DA9FF" },
+};
 const TIER_PERKS: Record<string, string[]> = {
   Bronze:   ["5 connects/day", "Basic profile", "Access to Radio"],
   Silver:   ["15 connects/day", "Verified badge eligibility", "Tonight's Deals access", "Chemistry ratings"],
@@ -51,21 +52,17 @@ const TIER_PERKS: Record<string, string[]> = {
 export default function ScoreScreen() {
   const colors = useColors("dark");
   const insets = useSafeAreaInsets();
-  const { userProfile } = useApp();
-  const score = 340;
-
-  const currentTier  = TIERS.find(t => score >= t.min && score <= t.max)!;
-  const nextTier     = TIERS[TIERS.indexOf(currentTier) + 1] ?? null;
-  const progress     = nextTier
-    ? (score - currentTier.min) / (nextTier.min - currentTier.min)
-    : 1;
-  const ptsToNext    = nextTier ? nextTier.min - score : 0;
-
+  const scoreQuery = useGetScore({ query: { queryKey: getGetScoreQueryKey(), staleTime: 30_000 } });
+  const data = scoreQuery.data;
+  const score = data?.points ?? 0;
+  const currentTier = TIERS.find(t => t.name === data?.tier) ?? TIERS[0];
+  const nextTier = data?.nextTier ? TIERS.find(t => t.name === data.nextTier) ?? null : null;
+  const progress = data?.progress ?? 0;
+  const ptsToNext = data?.ptsToNext ?? 0;
   const barWidth = useRef(new Animated.Value(0)).current;
-  React.useEffect(() => {
+  useEffect(() => {
     Animated.timing(barWidth, { toValue: progress, duration: 900, useNativeDriver: false }).start();
-  }, []);
-
+  }, [progress]);
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       {/* Header */}
@@ -76,7 +73,6 @@ export default function ScoreScreen() {
         <Text style={[styles.headerTitle, { color: colors.foreground }]}>NightMap Score</Text>
         <View style={{ width: 36 }} />
       </View>
-
       <ScrollView
         contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
         showsVerticalScrollIndicator={false}
@@ -85,13 +81,19 @@ export default function ScoreScreen() {
         <View style={[styles.hero, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
           <View style={styles.heroGlow} />
           <Text style={styles.tierEmoji}>{currentTier.emoji}</Text>
-          <Text style={[styles.scoreBig, { color: currentTier.color }]}>{score}</Text>
+          {scoreQuery.isLoading ? (
+            <ActivityIndicator color={currentTier.color} style={{ marginVertical: 12 }} />
+          ) : (
+            <Text style={[styles.scoreBig, { color: currentTier.color }]}>{score}</Text>
+          )}
           <Text style={styles.scorePts}>pts</Text>
           <View style={[styles.tierBadge, { backgroundColor: `${currentTier.color}18`, borderColor: `${currentTier.color}50` }]}>
             <Ionicons name="flash" size={13} color={currentTier.color} />
             <Text style={[styles.tierLabel, { color: currentTier.color }]}>{currentTier.name} Member</Text>
           </View>
-
+          {!!data?.loginStreak && data.loginStreak > 1 && (
+            <Text style={[styles.ptsToNext, { color: colors.mutedForeground, marginTop: 6 }]}>🔥 {data.loginStreak}-day login streak</Text>
+          )}
           {nextTier && (
             <View style={styles.progressSection}>
               <View style={styles.progressLabels}>
@@ -112,7 +114,6 @@ export default function ScoreScreen() {
             </View>
           )}
         </View>
-
         {/* Tier comparison */}
         <Text style={[styles.sectionHeader, { color: colors.mutedForeground }]}>YOUR TIER PERKS</Text>
         <View style={{ paddingHorizontal: 16, gap: 8 }}>
@@ -131,7 +132,6 @@ export default function ScoreScreen() {
             </View>
           )}
         </View>
-
         {/* How to earn */}
         <Text style={[styles.sectionHeader, { color: colors.mutedForeground }]}>HOW TO EARN POINTS</Text>
         <View style={{ paddingHorizontal: 16, gap: 8 }}>
@@ -147,31 +147,37 @@ export default function ScoreScreen() {
             </View>
           ))}
         </View>
-
         {/* Recent activity */}
         <Text style={[styles.sectionHeader, { color: colors.mutedForeground }]}>RECENT ACTIVITY</Text>
         <View style={{ paddingHorizontal: 16, gap: 1 }}>
-          {RECENT_ACTIVITY.map((act, i) => (
-            <View
-              key={act.label}
-              style={[
-                styles.actRow,
-                { borderBottomColor: colors.border },
-                i === 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
-              ]}
-            >
-              <View style={[styles.actIcon, { backgroundColor: `${act.color}15` }]}>
-                <Ionicons name={act.icon as never} size={15} color={act.color} />
+          {(data?.activity ?? []).length === 0 && !scoreQuery.isLoading && (
+            <Text style={[styles.actTime, { color: colors.mutedForeground, paddingVertical: 12 }]}>
+              No points yet. Complete a meetup or rate a companion to get started.
+            </Text>
+          )}
+          {(data?.activity ?? []).map((act, i) => {
+            const style = REASON_STYLE[act.reason] ?? { icon: "flash", color: "#FF8A3D" };
+            return (
+              <View
+                key={act.id}
+                style={[
+                  styles.actRow,
+                  { borderBottomColor: colors.border },
+                  i === 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
+                ]}
+              >
+                <View style={[styles.actIcon, { backgroundColor: `${style.color}15` }]}>
+                  <Ionicons name={style.icon as never} size={15} color={style.color} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.actLabel, { color: colors.foreground }]}>{act.label}</Text>
+                  <Text style={[styles.actTime, { color: colors.mutedForeground }]}>{relativeTime(act.createdAt)}</Text>
+                </View>
+                <Text style={[styles.actPts, { color: style.color }]}>+{act.points}</Text>
               </View>
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.actLabel, { color: colors.foreground }]}>{act.label}</Text>
-                <Text style={[styles.actTime, { color: colors.mutedForeground }]}>{act.time}</Text>
-              </View>
-              <Text style={[styles.actPts, { color: act.color }]}>{act.pts}</Text>
-            </View>
-          ))}
+            );
+          })}
         </View>
-
         {/* All tiers */}
         <Text style={[styles.sectionHeader, { color: colors.mutedForeground }]}>ALL TIERS</Text>
         <View style={{ paddingHorizontal: 16, gap: 8 }}>
