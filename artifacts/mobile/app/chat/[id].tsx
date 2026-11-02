@@ -151,11 +151,6 @@ export default function ChatScreen() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   };
 
-  const handleTip = (amount: number) => {
-    setShowTip(false);
-    if (id) sendMessage(id, `💰 Sent a UGX ${amount.toLocaleString()} tip`);
-  };
-
   const QUICK_REPLIES = ["Hey, are you free tonight?", "What's your rate?", "Where are you located?", "Send me your location"];
 
   if (!match) {
@@ -209,18 +204,10 @@ export default function ChatScreen() {
       {/* Tip menu */}
       {showTip && (
         <View style={[styles.tipMenu, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Text style={[styles.tipMenuTitle, { color: colors.foreground }]}>Send a tip via MoMo</Text>
-          <View style={styles.tipRow}>
-            {[5000, 10000, 20000, 50000].map((amt) => (
-              <TouchableOpacity
-                key={amt}
-                style={[styles.tipOption, { backgroundColor: "rgba(31,191,107,0.1)", borderColor: "rgba(31,191,107,0.3)" }]}
-                onPress={() => handleTip(amt)}
-              >
-                <Text style={[styles.tipAmt, { color: "#1FBF6B" }]}>UGX {(amt / 1000).toFixed(0)}k</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+          <Text style={[styles.tipMenuTitle, { color: colors.foreground }]}>Tips aren’t available yet</Text>
+          <Text style={[styles.tipUnavailableText, { color: colors.mutedForeground }]}>
+            No money is sent or recorded from this preview.
+          </Text>
         </View>
       )}
 
@@ -361,6 +348,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   tipMenuTitle: { fontFamily: "Inter_600SemiBold", fontSize: 14 },
+  tipUnavailableText: { fontFamily: "Inter_400Regular", fontSize: 12, lineHeight: 18 },
   tipRow: { flexDirection: "row", gap: 8 },
   tipOption: {
     flex: 1,

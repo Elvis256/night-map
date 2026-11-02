@@ -112,9 +112,9 @@ export function BookingModal({
           {sent ? (
             <View style={styles.successBlock}>
               <Text style={styles.successEmoji}>✅</Text>
-              <Text style={[styles.successTitle, { color: colors.foreground }]}>Request Sent!</Text>
+              <Text style={[styles.successTitle, { color: colors.foreground }]}>Request saved</Text>
               <Text style={[styles.successSub, { color: colors.mutedForeground }]}>
-                {companion.name} will respond within a few minutes
+                This preview saves the request on this device. {companion.name} has not been notified, and no payment was made.
               </Text>
             </View>
           ) : (
@@ -204,7 +204,7 @@ export function BookingModal({
               {/* Total + CTA */}
               <View style={[styles.totalBar, { backgroundColor: colors.background, borderColor: colors.border }]}>
                 <View>
-                  <Text style={[styles.totalLabel, { color: colors.mutedForeground }]}>Estimated total</Text>
+                    <Text style={[styles.totalLabel, { color: colors.mutedForeground }]}>Estimated service total</Text>
                   <Text style={[styles.totalAmount, { color: "#1FBF6B" }]}>
                     UGX {total.toLocaleString()}
                   </Text>
@@ -222,7 +222,7 @@ export function BookingModal({
               </View>
 
               <Text style={[styles.disclaimer, { color: colors.mutedForeground }]}>
-                No charge until {companion.name} confirms · Cancel anytime
+                Estimate only. This preview does not notify the companion or process payment.
               </Text>
             </>
           )}

@@ -17,25 +17,23 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@workspace/nightmap-design-system/hooks/use-colors";
 import { COMPANIONS, useApp } from "@/context/AppContext";
 
-const LIVE_DATA: Record<string, { title: string; viewers: number; ppvPrice: number; isPremium: boolean }> = {
-  "1": { title: "Morning yoga & chat ☀️",        viewers: 234, ppvPrice: 0,    isPremium: false },
-  "3": { title: "Get ready with me 💄",           viewers: 189, ppvPrice: 5000, isPremium: true  },
-  "5": { title: "Club night preparations 🎶",     viewers: 312, ppvPrice: 0,    isPremium: false },
-  "2": { title: "Q&A — ask me anything ✨",       viewers: 97,  ppvPrice: 3000, isPremium: true  },
+const LIVE_DATA: Record<string, { title: string; viewers: number }> = {
+  "1": { title: "Morning yoga & chat ☀️", viewers: 234 },
+  "3": { title: "Get ready with me 💄", viewers: 189 },
+  "5": { title: "Club night preparations 🎶", viewers: 312 },
+  "2": { title: "Q&A — ask me anything ✨", viewers: 97 },
 };
 
 const MOCK_COMMENTS = [
   { id: "1",  name: "James",   text: "You look amazing tonight! 🔥",      color: "#FF4E62" },
   { id: "2",  name: "Kevin",   text: "First time watching 👀",             color: "#3DA9FF" },
-  { id: "3",  name: "Sam",     text: "Sent you a rose 🌹",                 color: "#7A3CFF" },
+  { id: "3",  name: "Sam",     text: "Enjoying the stream 🌹",              color: "#7A3CFF" },
   { id: "4",  name: "Marcus",  text: "How long are you streaming for?",    color: "#FF8A3D" },
-  { id: "5",  name: "Brian",   text: "💎💎💎",                              color: "#1FBF6B" },
+  { id: "5",  name: "Brian",   text: "Great stream so far!",                color: "#1FBF6B" },
   { id: "6",  name: "David",   text: "Your bio said you're in Kampala?",   color: "#FF4E62" },
   { id: "7",  name: "Andre",   text: "Welcome back!! Missed your streams", color: "#3DA9FF" },
   { id: "8",  name: "Tone",    text: "Can we do a meet-up this weekend?",  color: "#7A3CFF" },
 ];
-
-const TIP_AMOUNTS = [2000, 5000, 10000, 20000];
 
 function FloatingHeart({ color, startX }: { color: string; startX: number }) {
   const anim = useRef(new Animated.Value(0)).current;
@@ -63,19 +61,11 @@ function FloatingHeart({ color, startX }: { color: string; startX: number }) {
   );
 }
 
-function BroadcastSetup({ companion, onGoLive }: { companion: NonNullable<ReturnType<typeof COMPANIONS.find>>; onGoLive: (title: string, ppv: number) => void }) {
+function BroadcastSetup({ companion, onGoLive }: { companion: NonNullable<ReturnType<typeof COMPANIONS.find>>; onGoLive: (title: string) => void }) {
   const colors = useColors("dark");
   const insets = useSafeAreaInsets();
   const [title, setTitle] = useState("");
   const [desc, setDesc] = useState("");
-  const [ppvIndex, setPpvIndex] = useState(0);
-  const PPV_OPTIONS = [
-    { label: "Free", price: 0 },
-    { label: "UGX 3,000", price: 3000 },
-    { label: "UGX 5,000", price: 5000 },
-    { label: "UGX 10,000", price: 10000 },
-  ];
-
   return (
     <View style={[styles.setupContainer, { backgroundColor: colors.background, paddingTop: Platform.OS === "web" ? 60 : insets.top }]}>
       <View style={styles.setupHeader}>
@@ -128,31 +118,16 @@ function BroadcastSetup({ companion, onGoLive }: { companion: NonNullable<Return
         </View>
 
         <View style={styles.setupSection}>
-          <Text style={[styles.setupLabel, { color: colors.mutedForeground }]}>PAY-PER-VIEW</Text>
-          <Text style={[styles.setupHint, { color: colors.mutedForeground }]}>Charge viewers to watch. You keep 80%.</Text>
-          <View style={styles.ppvRow}>
-            {PPV_OPTIONS.map((opt, i) => (
-              <TouchableOpacity
-                key={i}
-                style={[
-                  styles.ppvOption,
-                  {
-                    backgroundColor: ppvIndex === i ? "rgba(255,78,98,0.15)" : colors.card,
-                    borderColor: ppvIndex === i ? "#FF4E62" : colors.border,
-                  },
-                ]}
-                onPress={() => { setPpvIndex(i); Haptics.selectionAsync(); }}
-              >
-                <Text style={[styles.ppvOptionText, { color: ppvIndex === i ? "#FF4E62" : colors.foreground }]}>{opt.label}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+          <Text style={[styles.setupLabel, { color: colors.mutedForeground }]}>STREAM ACCESS</Text>
+          <Text style={[styles.setupHint, { color: colors.mutedForeground }]}>
+            Streams are free in this preview. Paid viewing and tips are not active.
+          </Text>
         </View>
 
         <View style={[styles.setupTips, { backgroundColor: "rgba(31,191,107,0.08)", borderColor: "rgba(31,191,107,0.3)" }]}>
           <Ionicons name="information-circle" size={16} color="#1FBF6B" />
           <Text style={[styles.setupTipText, { color: colors.mutedForeground }]}>
-            Tips are sent directly to your wallet. Withdraw anytime.
+            No stream payments or wallet credits are processed here.
           </Text>
         </View>
 
@@ -161,7 +136,7 @@ function BroadcastSetup({ companion, onGoLive }: { companion: NonNullable<Return
           onPress={() => {
             if (!title.trim()) return;
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-            onGoLive(title.trim(), PPV_OPTIONS[ppvIndex].price);
+            onGoLive(title.trim());
           }}
           activeOpacity={0.85}
         >
@@ -173,25 +148,19 @@ function BroadcastSetup({ companion, onGoLive }: { companion: NonNullable<Return
   );
 }
 
-function LiveView({ companion, title, ppvPrice, isBroadcaster }: {
+function LiveView({ companion, title, isBroadcaster }: {
   companion: NonNullable<ReturnType<typeof COMPANIONS.find>>;
   title: string;
-  ppvPrice: number;
   isBroadcaster: boolean;
 }) {
   const colors = useColors("dark");
   const insets = useSafeAreaInsets();
-  const { walletCredit } = useApp();
   const [viewers, setViewers] = useState(isBroadcaster ? 1 : (LIVE_DATA[companion.id]?.viewers ?? 50));
-  const [earnings, setEarnings] = useState(0);
   const [comment, setComment] = useState("");
   const [comments, setComments] = useState(MOCK_COMMENTS);
   const [hearts, setHearts] = useState<{ id: number; x: number; color: string }[]>([]);
-  const [tipSent, setTipSent] = useState<number | null>(null);
-  const [paywalled, setPaywalled] = useState(!isBroadcaster && ppvPrice > 0);
   const scrollRef = useRef<ScrollView>(null);
   const heartId = useRef(0);
-  const earningsAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -206,7 +175,7 @@ function LiveView({ companion, title, ppvPrice, isBroadcaster }: {
       const newComment = {
         id: Date.now().toString(),
         name: ["James", "Kevin", "Sam", "Marcus", "Brian", "David", "Andre"][Math.floor(Math.random() * 7)],
-        text: ["You look amazing 🔥", "❤️❤️❤️", "Stay longer please!", "Sending tips!", "Best stream today 🙌"][Math.floor(Math.random() * 5)],
+        text: ["You look amazing 🔥", "❤️❤️❤️", "Stay longer please!", "Great stream!", "Best stream today 🙌"][Math.floor(Math.random() * 5)],
         color: ["#FF4E62", "#3DA9FF", "#7A3CFF", "#FF8A3D"][Math.floor(Math.random() * 4)],
       };
       setComments(prev => [...prev.slice(-15), newComment]);
@@ -224,28 +193,6 @@ function LiveView({ companion, title, ppvPrice, isBroadcaster }: {
     setTimeout(() => setHearts(h => h.filter(hh => hh.id !== id)), 1500);
   };
 
-  const sendTip = (amount: number) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setTipSent(amount);
-    if (isBroadcaster) {
-      walletCredit(amount);
-      setEarnings(e => e + amount);
-      Animated.sequence([
-        Animated.timing(earningsAnim, { toValue: 1, duration: 200, useNativeDriver: true }),
-        Animated.timing(earningsAnim, { toValue: 0, duration: 400, useNativeDriver: true }),
-      ]).start();
-    }
-    setTimeout(() => setTipSent(null), 2000);
-    const tip: typeof comments[0] = {
-      id: Date.now().toString(),
-      name: isBroadcaster ? "Viewer" : "You",
-      text: `💰 Sent UGX ${amount.toLocaleString()} tip!`,
-      color: "#1FBF6B",
-    };
-    setComments(prev => [...prev.slice(-15), tip]);
-    scrollRef.current?.scrollToEnd({ animated: true });
-  };
-
   const sendComment = () => {
     if (!comment.trim()) return;
     Haptics.selectionAsync();
@@ -260,46 +207,6 @@ function LiveView({ companion, title, ppvPrice, isBroadcaster }: {
     scrollRef.current?.scrollToEnd({ animated: true });
   };
 
-  if (paywalled) {
-    return (
-      <View style={[styles.paywallContainer, { backgroundColor: colors.background, paddingTop: Platform.OS === "web" ? 60 : insets.top }]}>
-        <TouchableOpacity onPress={() => router.back()} style={[styles.backBtn, { position: "absolute", top: Platform.OS === "web" ? 60 : insets.top + 8, left: 16, zIndex: 10 }]}>
-          <Ionicons name="arrow-back" size={22} color={colors.foreground} />
-        </TouchableOpacity>
-        <View style={[styles.paywallCard, { backgroundColor: colors.card, borderColor: `${companion.color}50` }]}>
-          <View style={[styles.paywallAvatar, { backgroundColor: companion.color }]}>
-            <Text style={styles.paywallInitial}>{companion.name[0]}</Text>
-            <View style={[styles.streamerLiveBadge, { bottom: -8 }]}>
-              <Text style={styles.streamerLiveBadgeText}>LIVE</Text>
-            </View>
-          </View>
-          <Text style={[styles.paywallName, { color: colors.foreground }]}>{companion.name} is live</Text>
-          <Text style={[styles.paywallTitle, { color: colors.mutedForeground }]}>{title}</Text>
-          <View style={styles.paywallViewers}>
-            <Ionicons name="eye" size={14} color={colors.mutedForeground} />
-            <Text style={[styles.paywallViewersText, { color: colors.mutedForeground }]}>{viewers} watching</Text>
-          </View>
-          <View style={[styles.paywallDivider, { backgroundColor: colors.border }]} />
-          <Text style={[styles.paywallPrompt, { color: colors.foreground }]}>This is a pay-per-view stream</Text>
-          <Text style={[styles.paywallPrice, { color: "#FF4E62" }]}>UGX {ppvPrice.toLocaleString()}</Text>
-          <Text style={[styles.paywallSub, { color: colors.mutedForeground }]}>One-time unlock · Watch live + replay</Text>
-          <TouchableOpacity
-            style={[styles.unlockBtn, { backgroundColor: "#FF4E62" }]}
-            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setPaywalled(false); }}
-          >
-            <Ionicons name="lock-open" size={16} color="#fff" />
-            <Text style={styles.unlockBtnText}>Unlock for UGX {ppvPrice.toLocaleString()}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => router.back()}>
-            <Text style={[styles.paywallSkip, { color: colors.mutedForeground }]}>Maybe later</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    );
-  }
-
-  const earningsScale = earningsAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.4] });
-
   return (
     <View style={[styles.liveContainer, { backgroundColor: "#000" }]}>
       {/* Background colour wash */}
@@ -313,7 +220,7 @@ function LiveView({ companion, title, ppvPrice, isBroadcaster }: {
         <View style={styles.liveTitleBlock}>
           <View style={styles.liveBadgePill}>
             <View style={styles.livePulse} />
-            <Text style={styles.liveBadgeText}>LIVE</Text>
+          <Text style={styles.liveBadgeText}>FREE PREVIEW</Text>
           </View>
           <Text style={styles.liveStreamTitle} numberOfLines={1}>{title}</Text>
         </View>
@@ -334,23 +241,6 @@ function LiveView({ companion, title, ppvPrice, isBroadcaster }: {
 
       {/* Floating hearts */}
       {hearts.map(h => <FloatingHeart key={h.id} color={h.color} startX={h.x} />)}
-
-      {/* Broadcaster earnings panel */}
-      {isBroadcaster && (
-        <View style={styles.earningsBar}>
-          <Animated.View style={{ transform: [{ scale: earningsScale }] }}>
-            <Text style={styles.earningsLabel}>💰 UGX {earnings.toLocaleString()}</Text>
-          </Animated.View>
-          <Text style={styles.earningsSub}>earned this stream</Text>
-        </View>
-      )}
-
-      {/* Tip sent toast */}
-      {tipSent !== null && (
-        <View style={styles.tipToast}>
-          <Text style={styles.tipToastText}>💰 UGX {tipSent.toLocaleString()} sent!</Text>
-        </View>
-      )}
 
       {/* Chat */}
       <View style={styles.chatArea} pointerEvents="box-none">
@@ -375,18 +265,9 @@ function LiveView({ companion, title, ppvPrice, isBroadcaster }: {
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         style={[styles.liveControls, { paddingBottom: Platform.OS === "web" ? 24 : insets.bottom + 8 }]}
       >
-        {/* Tip row */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tipRow}>
-          {TIP_AMOUNTS.map(amt => (
-            <TouchableOpacity
-              key={amt}
-              style={styles.tipBtn}
-              onPress={() => sendTip(amt)}
-            >
-              <Text style={styles.tipBtnText}>💎 {(amt / 1000).toFixed(0)}k</Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+        <Text style={styles.paymentUnavailable}>
+          Tips and paid viewing are disabled in this preview.
+        </Text>
 
         {/* Comment input + action buttons */}
         <View style={styles.commentRow}>
@@ -424,7 +305,6 @@ export default function LiveScreen() {
   const { userProfile } = useApp();
   const [isLive, setIsLive] = useState(false);
   const [liveTitle, setLiveTitle] = useState("");
-  const [livePpv, setLivePpv] = useState(0);
 
   const isBroadcaster = mode === "broadcast" || (mode !== "watch" && userProfile.isCompanion);
 
@@ -437,7 +317,6 @@ export default function LiveScreen() {
       <LiveView
         companion={companion}
         title={streamData?.title ?? "Live Stream"}
-        ppvPrice={streamData?.ppvPrice ?? 0}
         isBroadcaster={false}
       />
     );
@@ -447,9 +326,8 @@ export default function LiveScreen() {
     return (
       <BroadcastSetup
         companion={companion}
-        onGoLive={(title, ppv) => {
+        onGoLive={(title) => {
           setLiveTitle(title);
-          setLivePpv(ppv);
           setIsLive(true);
         }}
       />
@@ -460,7 +338,6 @@ export default function LiveScreen() {
     <LiveView
       companion={companion}
       title={liveTitle}
-      ppvPrice={livePpv}
       isBroadcaster={true}
     />
   );
@@ -575,6 +452,12 @@ const styles = StyleSheet.create({
   paywallViewers: { flexDirection: "row", alignItems: "center", gap: 5 },
   paywallViewersText: { fontFamily: "Inter_400Regular", fontSize: 13 },
   paywallDivider: { width: "100%", height: 1, marginVertical: 4 },
+  paymentUnavailable: {
+    color: "rgba(255,255,255,0.65)",
+    fontFamily: "Inter_400Regular",
+    fontSize: 11,
+    textAlign: "center",
+  },
   paywallPrompt: { fontFamily: "Inter_600SemiBold", fontSize: 15 },
   paywallPrice: { fontFamily: "Inter_700Bold", fontSize: 28 },
   paywallSub: { fontFamily: "Inter_400Regular", fontSize: 13, textAlign: "center" },

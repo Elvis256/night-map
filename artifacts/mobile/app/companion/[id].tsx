@@ -168,7 +168,7 @@ export default function CompanionDetailScreen() {
             <View style={[styles.escrowNote, { backgroundColor: "rgba(255,138,61,0.08)", borderColor: "rgba(255,138,61,0.2)" }]}>
               <Ionicons name="shield-checkmark" size={12} color={colors.accent} />
               <Text style={[styles.escrowText, { color: colors.mutedForeground }]}>
-                Payment held in escrow · released after meetup confirmed
+                Rates are informational in this preview. NightMap does not process or hold payments here.
               </Text>
             </View>
           </View>

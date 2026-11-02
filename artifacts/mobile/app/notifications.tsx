@@ -97,16 +97,6 @@ const INITIAL_NOTIFS: Notif[] = [
     actionRoute: "/discover",
   },
   {
-    id: "n7",
-    type: "tip",
-    title: "Tip received 💰",
-    body: "You received UGX 10,000 from a connection. Added to wallet.",
-    time: "Yesterday",
-    read: true,
-    companionColor: "#3DA9FF",
-    companionInitial: "N",
-  },
-  {
     id: "n8",
     type: "available",
     title: "Nadine is online now",

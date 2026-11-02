@@ -200,11 +200,12 @@ function BookingCard({
       {booking.status === "upcoming" && (
         <View style={styles.actionsRow}>
           <TouchableOpacity
-            style={[styles.actionBtn, { flex: 1, backgroundColor: "rgba(61,169,255,0.10)", borderColor: "rgba(61,169,255,0.3)" }]}
-            onPress={() => router.push("/payment")}
+            style={[styles.actionBtn, { flex: 1, backgroundColor: colors.muted, borderColor: colors.border, opacity: 0.7 }]}
+            disabled
+            accessibilityState={{ disabled: true }}
           >
-            <Ionicons name="wallet-outline" size={15} color="#3DA9FF" />
-            <Text style={[styles.actionBtnText, { color: "#3DA9FF" }]}>Fund Wallet</Text>
+            <Ionicons name="information-circle-outline" size={15} color={colors.mutedForeground} />
+            <Text style={[styles.actionBtnText, { color: colors.mutedForeground }]}>Payments unavailable</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.actionBtn, { flex: 1, backgroundColor: colors.muted, borderColor: colors.border }]}

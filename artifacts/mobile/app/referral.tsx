@@ -16,35 +16,19 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@workspace/nightmap-design-system/hooks/use-colors";
-import { useApp } from "@/context/AppContext";
 
 const USER_CODE = "NIGHT-K4NJ";
-const BONUS_PER_REFERRAL_PTS = 200;
-const BONUS_PER_REFERRAL_UGX = 5_000;
-
-const REFERRAL_HISTORY = [
-  { id: "r1", name: "Amara D.",    joinedAt: "2 days ago",  status: "active",  ptsEarned: 200, ugxEarned: 5000 },
-  { id: "r2", name: "Kevin O.",    joinedAt: "1 week ago",  status: "active",  ptsEarned: 200, ugxEarned: 5000 },
-  { id: "r3", name: "Leila M.",    joinedAt: "2 weeks ago", status: "pending", ptsEarned: 0,   ugxEarned: 0    },
-];
 
 const HOW_IT_WORKS = [
-  { step: "1", icon: "share-outline",         color: "#3DA9FF", text: "Share your unique code or link with friends" },
-  { step: "2", icon: "person-add-outline",    color: "#1FBF6B", text: "Your friend signs up and makes their first booking" },
-  { step: "3", icon: "gift-outline",          color: "#FF8A3D", text: "You both earn 200 pts + UGX 5,000 wallet credit" },
+  { step: "1", icon: "share-outline", color: "#3DA9FF", text: "Share NightMap with friends" },
+  { step: "2", icon: "time-outline", color: "#FF8A3D", text: "Invite tracking will be available after launch" },
 ];
 
 export default function ReferralScreen() {
   const colors  = useColors("dark");
   const insets  = useSafeAreaInsets();
-  const { userProfile } = useApp();
   const [copied, setCopied] = useState(false);
   const copyScale = useRef(new Animated.Value(1)).current;
-
-  const totalPts = REFERRAL_HISTORY.filter(r => r.status === "active").reduce((s, r) => s + r.ptsEarned, 0);
-  const totalUgx = REFERRAL_HISTORY.filter(r => r.status === "active").reduce((s, r) => s + r.ugxEarned, 0);
-  const activeCount  = REFERRAL_HISTORY.filter(r => r.status === "active").length;
-  const pendingCount = REFERRAL_HISTORY.filter(r => r.status === "pending").length;
 
   const handleCopy = () => {
     Clipboard.setStringAsync(USER_CODE).catch(() => {});
@@ -61,11 +45,11 @@ export default function ReferralScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
       await Share.share({
-        title: "Join me on NightMap",
-        message: `Join me on NightMap with code ${USER_CODE}!\n\nYou'll get UGX 5,000 wallet credit on your first booking.\n\nDownload: nightmap.app`,
+        title: "NightMap invite preview",
+        message: `Check out NightMap. This invite code is a preview and is not tracked yet: ${USER_CODE}.\n\nDownload: nightmap.app`,
       });
     } catch {
-      Alert.alert("Share NightMap", `Use my code ${USER_CODE} when signing up.`);
+      Alert.alert("Share NightMap", `Preview invite code: ${USER_CODE}. Referral tracking is not active yet.`);
     }
   };
 
@@ -76,7 +60,7 @@ export default function ReferralScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
           <Ionicons name="arrow-back" size={22} color={colors.foreground} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.foreground }]}>Refer & Earn</Text>
+        <Text style={[styles.headerTitle, { color: colors.foreground }]}>Invite Friends</Text>
         <View style={{ width: 36 }} />
       </View>
 
@@ -88,49 +72,18 @@ export default function ReferralScreen() {
         <View style={[styles.hero, { borderBottomColor: colors.border }]}>
           <View style={styles.heroGlow} />
           <Text style={styles.heroEmoji}>🎁</Text>
-          <Text style={[styles.heroTitle, { color: colors.foreground }]}>Invite Friends, Earn Together</Text>
+          <Text style={[styles.heroTitle, { color: colors.foreground }]}>Help grow NightMap</Text>
           <Text style={[styles.heroSub, { color: colors.mutedForeground }]}>
-            For every friend who joins and books, you both get{"\n"}
-            <Text style={{ color: "#1FBF6B", fontFamily: "Inter_700Bold" }}>200 pts</Text>
-            {" "}+{" "}
-            <Text style={{ color: "#1FBF6B", fontFamily: "Inter_700Bold" }}>UGX 5,000</Text>
-            {" "}wallet credit
+            Invite code and referral tracking are preview-only. No points or wallet rewards are issued yet.
           </Text>
         </View>
 
-        {/* Stats */}
-        <View style={[styles.statsRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <View style={styles.statItem}>
-            <Text style={[styles.statVal, { color: "#FF8A3D" }]}>{activeCount}</Text>
-            <Text style={[styles.statLab, { color: colors.mutedForeground }]}>Referred</Text>
-          </View>
-          <View style={[styles.statDiv, { backgroundColor: colors.border }]} />
-          <View style={styles.statItem}>
-            <Text style={[styles.statVal, { color: "#1FBF6B" }]}>+{totalPts}</Text>
-            <Text style={[styles.statLab, { color: colors.mutedForeground }]}>Pts Earned</Text>
-          </View>
-          <View style={[styles.statDiv, { backgroundColor: colors.border }]} />
-          <View style={styles.statItem}>
-            <Text style={[styles.statVal, { color: "#1FBF6B" }]}>UGX {(totalUgx / 1000).toFixed(0)}k</Text>
-            <Text style={[styles.statLab, { color: colors.mutedForeground }]}>Wallet Credit</Text>
-          </View>
-          {pendingCount > 0 && (
-            <>
-              <View style={[styles.statDiv, { backgroundColor: colors.border }]} />
-              <View style={styles.statItem}>
-                <Text style={[styles.statVal, { color: "#3DA9FF" }]}>{pendingCount}</Text>
-                <Text style={[styles.statLab, { color: colors.mutedForeground }]}>Pending</Text>
-              </View>
-            </>
-          )}
-        </View>
-
         {/* Your code */}
-        <Text style={[styles.sectionHeader, { color: colors.mutedForeground }]}>YOUR REFERRAL CODE</Text>
+        <Text style={[styles.sectionHeader, { color: colors.mutedForeground }]}>PREVIEW INVITE CODE</Text>
         <View style={{ paddingHorizontal: 16, gap: 10 }}>
           <Animated.View style={[styles.codeCard, { backgroundColor: colors.card, borderColor: "#FF8A3D", transform: [{ scale: copyScale }] }]}>
             <View style={styles.codeGlow} />
-            <Text style={[styles.codeLabel, { color: colors.mutedForeground }]}>SHARE THIS CODE</Text>
+            <Text style={[styles.codeLabel, { color: colors.mutedForeground }]}>NOT TRACKED YET</Text>
             <Text style={[styles.code, { color: "#FF8A3D" }]}>{USER_CODE}</Text>
             <TouchableOpacity
               style={[styles.copyBtn, { backgroundColor: copied ? "#1FBF6B" : "rgba(255,138,61,0.12)", borderColor: copied ? "#1FBF6B" : "#FF8A3D" }]}
@@ -138,14 +91,14 @@ export default function ReferralScreen() {
             >
               <Ionicons name={copied ? "checkmark" : "copy-outline"} size={15} color={copied ? "#fff" : "#FF8A3D"} />
               <Text style={[styles.copyBtnText, { color: copied ? "#fff" : "#FF8A3D" }]}>
-                {copied ? "Copied!" : "Copy Code"}
+                {copied ? "Copied!" : "Copy preview code"}
               </Text>
             </TouchableOpacity>
           </Animated.View>
 
           <TouchableOpacity style={[styles.shareBtn, { backgroundColor: colors.primary }]} onPress={handleShare}>
             <Ionicons name="share-social-outline" size={18} color="#fff" />
-            <Text style={styles.shareBtnText}>Share via WhatsApp / SMS</Text>
+            <Text style={styles.shareBtnText}>Share NightMap preview</Text>
           </TouchableOpacity>
         </View>
 
@@ -165,45 +118,8 @@ export default function ReferralScreen() {
           ))}
         </View>
 
-        {/* Referral history */}
-        <Text style={[styles.sectionHeader, { color: colors.mutedForeground }]}>YOUR REFERRALS</Text>
-        <View style={{ paddingHorizontal: 16, gap: 1 }}>
-          {REFERRAL_HISTORY.map((ref, i) => (
-            <View
-              key={ref.id}
-              style={[
-                styles.refRow,
-                { borderBottomColor: colors.border },
-                i === 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
-              ]}
-            >
-              <View style={[styles.refAvatar, { backgroundColor: ref.status === "active" ? "rgba(31,191,107,0.15)" : colors.muted }]}>
-                <Text style={[styles.refInitial, { color: ref.status === "active" ? "#1FBF6B" : colors.mutedForeground }]}>
-                  {ref.name[0]}
-                </Text>
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.refName, { color: colors.foreground }]}>{ref.name}</Text>
-                <Text style={[styles.refTime, { color: colors.mutedForeground }]}>Joined {ref.joinedAt}</Text>
-              </View>
-              {ref.status === "active" ? (
-                <View style={{ alignItems: "flex-end", gap: 2 }}>
-                  <Text style={[styles.refPts, { color: "#FF8A3D" }]}>+{ref.ptsEarned} pts</Text>
-                  <Text style={[styles.refUgx, { color: "#1FBF6B" }]}>+UGX {(ref.ugxEarned / 1000).toFixed(0)}k</Text>
-                </View>
-              ) : (
-                <View style={[styles.pendingPill, { backgroundColor: "rgba(61,169,255,0.1)", borderColor: "rgba(61,169,255,0.3)" }]}>
-                  <Ionicons name="time-outline" size={10} color="#3DA9FF" />
-                  <Text style={[styles.pendingText, { color: "#3DA9FF" }]}>Pending</Text>
-                </View>
-              )}
-            </View>
-          ))}
-        </View>
-
-        {/* Terms note */}
         <Text style={[styles.terms, { color: colors.mutedForeground }]}>
-          Rewards credited after referred friend completes their first booking · Max 20 referrals/month · Full terms at nightmap.app/referral
+          Referral tracking and rewards will need to be connected before this code can be used for sign-ups or rewards.
         </Text>
       </ScrollView>
     </View>

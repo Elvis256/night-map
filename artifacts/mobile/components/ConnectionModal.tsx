@@ -2,7 +2,6 @@ import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import React, { useState } from "react";
 import {
-  ActivityIndicator,
   Modal,
   Pressable,
   StyleSheet,
@@ -11,7 +10,7 @@ import {
   View,
 } from "react-native";
 import { useColors } from "@workspace/nightmap-design-system/hooks/use-colors";
-import { Companion, Match, formatUGX, useApp } from "@/context/AppContext";
+import { Companion, formatUGX, useApp } from "@/context/AppContext";
 
 interface ConnectionModalProps {
   companion: Companion | null;
@@ -20,75 +19,34 @@ interface ConnectionModalProps {
   onConnected: () => void;
 }
 
-type ConnectionType = "standard" | "super" | "paidDm";
-
-interface Option {
-  type: ConnectionType;
-  label: string;
-  description: string;
-  price: number;
-  icon: string;
-  highlight?: boolean;
-}
-
-const OPTIONS: Option[] = [
-  {
-    type: "paidDm",
-    label: "Paid DM",
-    description: "Send one message before committing",
-    price: 2000,
-    icon: "chatbubble-outline",
-  },
-  {
-    type: "standard",
-    label: "Connect",
-    description: "Standard connection request",
-    price: 3500,
-    icon: "heart-outline",
-  },
-  {
-    type: "super",
-    label: "Super Request",
-    description: "Priority — she sees yours first",
-    price: 8000,
-    icon: "star",
-    highlight: true,
-  },
-];
-
 export function ConnectionModal({ companion, visible, onClose, onConnected }: ConnectionModalProps) {
   const colors = useColors("dark");
   const { addMatch } = useApp();
-  const [selected, setSelected] = useState<ConnectionType>("standard");
-  const [step, setStep] = useState<"pick" | "pay" | "done">("pick");
-  const [paymentMethod, setPaymentMethod] = useState<"mtn" | "airtel" | "mpesa">("mtn");
+  const [step, setStep] = useState<"request" | "done">("request");
 
-  const selectedOption = OPTIONS.find((o) => o.type === selected)!;
-
-  const handlePay = () => {
-    setStep("pay");
+  const handleConnect = () => {
+    if (!companion) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setTimeout(() => {
-      if (companion) addMatch(companion, selected);
-      setStep("done");
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setTimeout(() => {
-        onConnected();
-        setStep("pick");
-      }, 1400);
-    }, 2200);
+    addMatch(companion, "standard");
+    setStep("done");
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   };
 
   const handleClose = () => {
-    setStep("pick");
+    setStep("request");
     onClose();
+  };
+
+  const handleDone = () => {
+    setStep("request");
+    onConnected();
   };
 
   if (!companion) return null;
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={handleClose}>
-      <Pressable style={styles.backdrop} onPress={step === "pick" ? handleClose : undefined}>
+      <Pressable style={styles.backdrop} onPress={step === "request" ? handleClose : undefined}>
         <Pressable style={[styles.sheet, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <View style={[styles.handle, { backgroundColor: colors.border }]} />
 
@@ -97,18 +55,16 @@ export function ConnectionModal({ companion, visible, onClose, onConnected }: Co
               <View style={[styles.doneIcon, { backgroundColor: "rgba(255,78,98,0.15)" }]}>
                 <Ionicons name="checkmark-circle" size={56} color={colors.primary} />
               </View>
-              <Text style={[styles.doneTitle, { color: colors.foreground }]}>Connected!</Text>
+              <Text style={[styles.doneTitle, { color: colors.foreground }]}>Request saved</Text>
               <Text style={[styles.doneSubtitle, { color: colors.mutedForeground }]}>
-                {companion.name} will receive your request
+                This preview saves the connection on this device. It does not notify {companion.name} or process a payment.
               </Text>
-            </View>
-          ) : step === "pay" ? (
-            <View style={styles.doneState}>
-              <ActivityIndicator size="large" color={colors.primary} />
-              <Text style={[styles.doneTitle, { color: colors.foreground }]}>Processing</Text>
-              <Text style={[styles.doneSubtitle, { color: colors.mutedForeground }]}>
-                Charging {formatUGX(selectedOption.price)} via {paymentMethod === "mtn" ? "MTN MoMo" : paymentMethod === "airtel" ? "Airtel Money" : "M-Pesa"}
-              </Text>
+              <TouchableOpacity
+                style={[styles.requestBtn, { backgroundColor: colors.primary }]}
+                onPress={handleDone}
+              >
+                <Text style={styles.requestBtnText}>Close</Text>
+              </TouchableOpacity>
             </View>
           ) : (
             <>
@@ -126,87 +82,32 @@ export function ConnectionModal({ companion, visible, onClose, onConnected }: Co
                 </View>
               </View>
 
-              <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>Choose request type</Text>
-              <View style={styles.options}>
-                {OPTIONS.map((opt) => (
-                  <TouchableOpacity
-                    key={opt.type}
-                    style={[
-                      styles.optionRow,
-                      {
-                        backgroundColor: selected === opt.type
-                          ? opt.highlight
-                            ? "rgba(255,138,61,0.12)"
-                            : "rgba(255,78,98,0.12)"
-                          : colors.muted,
-                        borderColor: selected === opt.type
-                          ? opt.highlight ? colors.accent : colors.primary
-                          : colors.border,
-                      },
-                    ]}
-                    onPress={() => setSelected(opt.type)}
-                  >
-                    <View style={[styles.optionIconWrap, {
-                      backgroundColor: opt.highlight ? "rgba(255,138,61,0.15)" : "rgba(255,78,98,0.12)"
-                    }]}>
-                      <Ionicons
-                        name={opt.icon as never}
-                        size={18}
-                        color={opt.highlight ? colors.accent : colors.primary}
-                      />
-                    </View>
-                    <View style={styles.optionText}>
-                      <View style={styles.optionTitleRow}>
-                        <Text style={[styles.optionLabel, { color: colors.foreground }]}>{opt.label}</Text>
-                        {opt.highlight && (
-                          <View style={[styles.popularBadge, { backgroundColor: colors.accent }]}>
-                            <Text style={styles.popularText}>POPULAR</Text>
-                          </View>
-                        )}
-                      </View>
-                      <Text style={[styles.optionDesc, { color: colors.mutedForeground }]}>{opt.description}</Text>
-                    </View>
-                    <Text style={[styles.optionPrice, { color: opt.highlight ? colors.accent : colors.primary }]}>
-                      {formatUGX(opt.price)}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+              <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>Connection request</Text>
+              <View style={[styles.requestCard, { backgroundColor: colors.muted, borderColor: colors.border }]}>
+                <View style={[styles.requestIcon, { backgroundColor: "rgba(255,78,98,0.12)" }]}>
+                  <Ionicons name="chatbubble-ellipses-outline" size={19} color={colors.primary} />
+                </View>
+                <View style={styles.optionText}>
+                  <Text style={[styles.optionLabel, { color: colors.foreground }]}>Free standard request</Text>
+                  <Text style={[styles.optionDesc, { color: colors.mutedForeground }]}>
+                    Start a conversation without a per-request fee.
+                  </Text>
+                </View>
               </View>
 
-              <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>Pay via Mobile Money</Text>
-              <View style={styles.paymentMethods}>
-                {(["mtn", "airtel", "mpesa"] as const).map((method) => (
-                  <TouchableOpacity
-                    key={method}
-                    style={[
-                      styles.paymentBtn,
-                      {
-                        backgroundColor: paymentMethod === method ? "rgba(255,78,98,0.12)" : colors.muted,
-                        borderColor: paymentMethod === method ? colors.primary : colors.border,
-                      },
-                    ]}
-                    onPress={() => setPaymentMethod(method)}
-                  >
-                    <Text style={[styles.paymentLabel, { color: paymentMethod === method ? colors.primary : colors.mutedForeground }]}>
-                      {method === "mtn" ? "MTN MoMo" : method === "airtel" ? "Airtel" : "M-Pesa"}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              <View style={[styles.escrowNote, { backgroundColor: "rgba(255,138,61,0.08)", borderColor: "rgba(255,138,61,0.25)" }]}>
-                <Ionicons name="shield-checkmark" size={14} color={colors.accent} />
-                <Text style={[styles.escrowText, { color: colors.mutedForeground }]}>
-                  Payment held in escrow — released only after meetup confirmed
+              <View style={[styles.paymentNote, { backgroundColor: colors.muted, borderColor: colors.border }]}>
+                <Ionicons name="information-circle-outline" size={15} color={colors.accent} />
+                <Text style={[styles.paymentNoteText, { color: colors.mutedForeground }]}>
+                  This preview stores the request locally. No payment or escrow is provided.
                 </Text>
               </View>
 
               <TouchableOpacity
-                style={[styles.payBtn, { backgroundColor: colors.primary }]}
-                onPress={handlePay}
+                style={[styles.requestBtn, { backgroundColor: colors.primary }]}
+                onPress={handleConnect}
               >
-                <Ionicons name="lock-closed" size={16} color="#fff" />
-                <Text style={styles.payBtnText}>Pay {formatUGX(selectedOption.price)}</Text>
+                <Ionicons name="paper-plane-outline" size={16} color="#fff" />
+                <Text style={styles.requestBtnText}>Send request</Text>
               </TouchableOpacity>
             </>
           )}
@@ -258,16 +159,15 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
     letterSpacing: 0.8,
   },
-  options: { gap: 8 },
-  optionRow: {
+  requestCard: {
     flexDirection: "row",
     alignItems: "center",
     padding: 12,
     borderRadius: 14,
-    borderWidth: 1.5,
+    borderWidth: 1,
     gap: 10,
   },
-  optionIconWrap: {
+  requestIcon: {
     width: 36,
     height: 36,
     borderRadius: 10,
@@ -275,26 +175,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   optionText: { flex: 1 },
-  optionTitleRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   optionLabel: { fontFamily: "Inter_600SemiBold", fontSize: 14 },
-  popularBadge: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  popularText: { color: "#fff", fontSize: 9, fontFamily: "Inter_700Bold" },
   optionDesc: { fontFamily: "Inter_400Regular", fontSize: 12, marginTop: 2 },
-  optionPrice: { fontFamily: "Inter_700Bold", fontSize: 14 },
-  paymentMethods: { flexDirection: "row", gap: 8 },
-  paymentBtn: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 12,
-    borderWidth: 1.5,
-    alignItems: "center",
-  },
-  paymentLabel: { fontFamily: "Inter_600SemiBold", fontSize: 13 },
-  escrowNote: {
+  paymentNote: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
@@ -302,8 +185,8 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     borderWidth: 1,
   },
-  escrowText: { fontFamily: "Inter_400Regular", fontSize: 12, flex: 1, lineHeight: 17 },
-  payBtn: {
+  paymentNoteText: { fontFamily: "Inter_400Regular", fontSize: 12, flex: 1, lineHeight: 17 },
+  requestBtn: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
@@ -311,7 +194,7 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     borderRadius: 16,
   },
-  payBtnText: { color: "#fff", fontFamily: "Inter_700Bold", fontSize: 16 },
+  requestBtnText: { color: "#fff", fontFamily: "Inter_700Bold", fontSize: 16 },
   doneState: {
     alignItems: "center",
     paddingVertical: 32,

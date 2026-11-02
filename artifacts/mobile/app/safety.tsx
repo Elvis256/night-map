@@ -34,7 +34,7 @@ const SAFETY_TIPS = [
   { icon: "shield-checkmark-outline",color: "#FF8A3D", tip: "Use the in-app meetup code to confirm identity at meetup" },
   { icon: "phone-portrait-outline",  color: "#7A3CFF", tip: "Keep your phone charged and mobile data on during the evening" },
   { icon: "eye-off-outline",         color: "#FF4E62", tip: "Never share your home address in chat before meeting in person" },
-  { icon: "cash-outline",            color: "#1FBF6B", tip: "Pay only through NightMap wallet — never cash upfront" },
+  { icon: "cash-outline",            color: "#1FBF6B", tip: "NightMap does not process payments in this preview. Never send money before verifying a person and agreeing on safe terms." },
 ];
 
 const CHECK_IN_INTERVALS = [

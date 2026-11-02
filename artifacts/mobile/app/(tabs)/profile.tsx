@@ -22,7 +22,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@workspace/nightmap-design-system/hooks/use-colors";
 import { withAlpha } from "@workspace/nightmap-design-system/lib/native-theme";
 import { useLocationCity } from "@/hooks/useLocationCity";
-import { formatUGX, useApp } from "@/context/AppContext";
+import { useApp } from "@/context/AppContext";
 
 function SettingRow({
   icon,
@@ -66,7 +66,7 @@ function SettingRow({
 export default function ProfileScreen() {
   const colors = useColors("dark");
   const insets = useSafeAreaInsets();
-  const { userProfile, toggleAvailability, updateProfile, matches, walletCredit } = useApp();
+  const { userProfile, toggleAvailability, updateProfile, matches } = useApp();
   const [panicActive, setPanicActive] = useState(false);
   const [contactInput, setContactInput] = useState(userProfile.trustedContact);
   const [showContactInput, setShowContactInput] = useState(false);
@@ -576,7 +576,7 @@ export default function ProfileScreen() {
         ))}
       </View>
 
-      {/* Wallet — always visible, links to full wallet screen */}
+      {/* Wallet preview — balances and transactions are not active */}
       <TouchableOpacity
         style={[styles.walletCard, { backgroundColor: colors.card, borderColor: userProfile.isCompanion ? colors.primary : colors.border }]}
         onPress={() => router.push("/wallet")}
@@ -584,35 +584,15 @@ export default function ProfileScreen() {
       >
         <View style={styles.walletHeader}>
           <Ionicons name="wallet" size={18} color={userProfile.isCompanion ? colors.primary : colors.mutedForeground} />
-          <Text style={[styles.walletTitle, { color: colors.foreground }]}>Wallet</Text>
+          <Text style={[styles.walletTitle, { color: colors.foreground }]}>
+            {userProfile.isCompanion ? "Earnings & payouts" : "Wallet"}
+          </Text>
           <Ionicons name="chevron-forward" size={15} color={colors.mutedForeground} style={{ marginLeft: "auto" }} />
         </View>
         <View style={styles.walletStats}>
-          {userProfile.isCompanion ? (
-            <>
-              <View style={styles.walletStat}>
-                <Text style={[styles.walletAmount, { color: colors.primary }]}>{formatUGX(userProfile.totalEarnings)}</Text>
-                <Text style={[styles.walletLabel, { color: colors.mutedForeground }]}>Total Earned</Text>
-              </View>
-              <View style={[styles.walletDivider, { backgroundColor: colors.border }]} />
-              <View style={styles.walletStat}>
-                <Text style={[styles.walletAmount, { color: colors.accent }]}>{formatUGX(userProfile.pendingPayout)}</Text>
-                <Text style={[styles.walletLabel, { color: colors.mutedForeground }]}>Pending Payout</Text>
-              </View>
-            </>
-          ) : (
-            <>
-              <View style={styles.walletStat}>
-                <Text style={[styles.walletAmount, { color: colors.foreground }]}>{formatUGX(userProfile.walletBalance)}</Text>
-                <Text style={[styles.walletLabel, { color: colors.mutedForeground }]}>Balance</Text>
-              </View>
-              <View style={[styles.walletDivider, { backgroundColor: colors.border }]} />
-              <View style={styles.walletStat}>
-                <Text style={[styles.walletAmount, { color: "#1FBF6B" }]}>+Top Up</Text>
-                <Text style={[styles.walletLabel, { color: colors.mutedForeground }]}>Add Funds</Text>
-              </View>
-            </>
-          )}
+          <Text style={[styles.walletLabel, { color: colors.mutedForeground }]}>
+            Payments are not connected in this preview
+          </Text>
         </View>
       </TouchableOpacity>
 

@@ -403,7 +403,6 @@ interface AppContextType {
   passedIds: Set<string>;
   likeCompanion: (id: string) => void;
   passCompanion: (id: string) => void;
-  walletCredit: (amount: number) => void;
   savedIds: Set<string>;
   toggleSaved: (id: string) => void;
 }
@@ -655,16 +654,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
-  const walletCredit = useCallback((amount: number) => {
-    setUserProfile((prev) => {
-      const updated = prev.isCompanion
-        ? { ...prev, totalEarnings: prev.totalEarnings + amount, pendingPayout: prev.pendingPayout + amount }
-        : { ...prev, walletBalance: prev.walletBalance + amount };
-      AsyncStorage.setItem("userProfile", JSON.stringify(updated));
-      return updated;
-    });
-  }, []);
-
   return (
     <AppContext.Provider
       value={{
@@ -689,7 +678,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         passedIds,
         likeCompanion,
         passCompanion,
-        walletCredit,
         savedIds,
         toggleSaved,
       }}
