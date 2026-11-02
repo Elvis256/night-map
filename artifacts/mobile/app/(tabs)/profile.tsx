@@ -20,6 +20,7 @@ import {
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@workspace/nightmap-design-system/hooks/use-colors";
+import { withAlpha } from "@workspace/nightmap-design-system/lib/native-theme";
 import { useLocationCity } from "@/hooks/useLocationCity";
 import { formatUGX, useApp } from "@/context/AppContext";
 
@@ -519,22 +520,30 @@ export default function ProfileScreen() {
         <Text style={[styles.progressHint, { color: colors.mutedForeground }]}>160 pts to Gold · Earn by rating meetups & referring friends</Text>
       </TouchableOpacity>
 
-      {/* VIP card */}
+      {/* Packages card */}
       <TouchableOpacity
-        style={[styles.vipCard, { backgroundColor: "rgba(122,60,255,0.08)", borderColor: "rgba(122,60,255,0.3)" }]}
+        style={[styles.vipCard, { backgroundColor: withAlpha(colors.accent, 0.1), borderColor: withAlpha(colors.accent, 0.3) }]}
         onPress={() => router.push("/vip")}
         activeOpacity={0.85}
       >
         <View style={styles.vipLeft}>
-          <Ionicons name="diamond" size={20} color="#7A3CFF" />
+          <Ionicons name={userProfile.isCompanion ? "trending-up-outline" : "diamond"} size={20} color={colors.accent} />
           <View>
-            <Text style={[styles.vipTitle, { color: "#7A3CFF" }]}>NightMap VIP</Text>
-            <Text style={[styles.vipSub, { color: colors.mutedForeground }]}>Unlimited connects · Priority listings · 0% platform fee</Text>
+            <Text style={[styles.vipTitle, { color: colors.accent }]}>
+              {userProfile.isCompanion ? "Featured placement" : "High-End Access"}
+            </Text>
+            <Text style={[styles.vipSub, { color: colors.mutedForeground }]}>
+              {userProfile.isCompanion ? "Free basic listing · Optional boost" : "Free browsing · Premium access"}
+            </Text>
           </View>
         </View>
-        <View style={[styles.vipPrice, { backgroundColor: "rgba(122,60,255,0.15)" }]}>
-          <Text style={[styles.vipAmt, { color: "#7A3CFF" }]}>UGX 35k</Text>
-          <Text style={[styles.vipPer, { color: "#7A3CFF" }]}>/mo</Text>
+        <View style={[styles.vipPrice, { backgroundColor: withAlpha(colors.accent, 0.15) }]}>
+          <Text style={[styles.vipAmt, { color: colors.accent }]}>
+            {userProfile.isCompanion ? "UGX 100k" : "UGX 20k"}
+          </Text>
+          <Text style={[styles.vipPer, { color: colors.accent }]}>
+            {userProfile.isCompanion ? "/wk" : "/mo"}
+          </Text>
         </View>
       </TouchableOpacity>
 

@@ -202,7 +202,7 @@ export default function OnboardingScreen() {
 
             {role === "companion" && (
               <View style={[styles.companionHint, { backgroundColor: "rgba(31,191,107,0.08)", borderColor: "rgba(31,191,107,0.3)" }]}>
-                <Text style={styles.companionHintText}>💡 Companion accounts earn UGX on every booking. You keep 80% after platform fee.</Text>
+                <Text style={styles.companionHintText}>💡 Start with a free profile, set your availability, and receive client requests.</Text>
               </View>
             )}
 

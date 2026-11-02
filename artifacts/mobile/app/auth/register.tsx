@@ -228,7 +228,7 @@ export default function RegisterScreen() {
                 >
                   <Text style={styles.roleEmoji}>💫</Text>
                   <Text style={[styles.roleTitle, role === "companion" && { color: "#1FBF6B" }]}>Companion</Text>
-                  <Text style={styles.roleDesc}>Earn UGX · Keep 80% per booking</Text>
+                  <Text style={styles.roleDesc}>Create a profile · Receive client requests</Text>
                 </TouchableOpacity>
               </View>
             </View>

@@ -1,1 +1,2 @@
 - [Expo dark palette override](expo-dark-palette.md) — use the design-system hook override for dark-only apps; Expo web preview lacks `Appearance.setColorScheme`.
+- [NightMap growth and package model](nightmap-package-model.md) — maximize earnings and user growth with accessible entry tiers, optional upgrades, and provider-approved checkout.
